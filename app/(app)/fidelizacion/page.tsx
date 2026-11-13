@@ -3,14 +3,21 @@ import { fecha, haceCuanto, linkWhatsApp, num, pesos } from '@/lib/formato'
 import { ESTADO_CUPON, describirPremio, estadoCupon, mensajeCupon } from '@/lib/premios'
 import KpiCard from '@/components/KpiCard'
 import ConfigFidelidadForm from '@/components/ConfigFidelidadForm'
+import MecanicasFidelidad from '@/components/MecanicasFidelidad'
 import { getClientesDormidos } from '@/lib/mock/clientes'
 import {
   MOCK_CERCA_PREMIO,
   MOCK_CUPONES_POR_VENCER,
   MOCK_CUPONES_ULTIMOS,
+  MOCK_CUMPLES_SEMANA,
   MOCK_FIDELIDAD_CONFIG,
   MOCK_FIDELIDAD_PRODUCTOS,
   MOCK_FIDELIDAD_STATS,
+  MOCK_INSCRIPTOS_SORTEO,
+  MOCK_MECANICAS,
+  MOCK_PREMIOS_PEDIDO,
+  MOCK_SORTEOS,
+  labelOrigenCupon,
 } from '@/lib/mock/fidelizacion'
 
 export const dynamic = 'force-dynamic'
@@ -23,6 +30,10 @@ export default async function FidelizacionPage() {
   const porVencer = MOCK_CUPONES_POR_VENCER
   const ultimos = MOCK_CUPONES_ULTIMOS
   const dormidos = getClientesDormidos(14).slice(0, 8)
+  const sorteos = MOCK_SORTEOS
+  const sorteoActivo = sorteos.find(s => s.estado === 'abierto') ?? sorteos[0]
+  const premiosPedido = MOCK_PREMIOS_PEDIDO
+  const cumples = MOCK_CUMPLES_SEMANA
 
   const identificadas = stats.ventas ? (stats.ventas_identificadas / stats.ventas) * 100 : 0
   const canje = stats.usados + stats.vencidos > 0 ? (stats.usados / (stats.usados + stats.vencidos)) * 100 : null
@@ -31,7 +42,9 @@ export default async function FidelizacionPage() {
     <div className="space-y-6">
       <div>
         <h1 className="h1">Fidelización</h1>
-        <p className="sub mt-1">Cola del día: a quién escribirle, cupones por vencer y quién hace rato que no viene.</p>
+        <p className="sub mt-1">
+          Ciclo de compras, premios por pedido, sorteos y cumple — todo mock de preview.
+        </p>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -110,7 +123,7 @@ export default async function FidelizacionPage() {
               {dormidos.map(c => {
                 const wa = linkWhatsApp(
                   c.telefono,
-                  `¡Hola${c.nombre ? ' ' + c.nombre.split(' ')[0] : ''}! Te extrañamos en La Sazón 🍔 ¿Pedimos algo rico hoy?`,
+                  `¡Hola${c.nombre ? ' ' + c.nombre.split(' ')[0] : ''}! Te extrañamos en La Sazón. ¿Pedimos algo rico hoy?`,
                 )
                 return (
                   <li key={c.id} className="px-5 py-2.5 flex items-center justify-between gap-3">
@@ -130,7 +143,122 @@ export default async function FidelizacionPage() {
         </div>
       </div>
 
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="card" id="sorteos">
+          <div className="card-head">
+            <div>
+              <h2 className="h2">Sorteos</h2>
+              <p className="text-xs text-[var(--ink-soft)] mt-0.5">Chances por pedidos con WhatsApp · mock</p>
+            </div>
+            {sorteoActivo?.estado === 'abierto' && <span className="chip chip-ember">En curso</span>}
+          </div>
+          <ul className="divide-y divide-[var(--line-soft)]">
+            {sorteos.map(s => (
+              <li key={s.id} className="px-5 py-3.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium">{s.titulo}</p>
+                    <p className="text-xs text-[var(--ink-soft)] mt-0.5">{s.premio}</p>
+                    <p className="text-[11px] text-[var(--ink-mute)] mt-1">{s.como_entra}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className={`chip ${s.estado === 'abierto' ? 'chip-ok' : 'chip-neutral'}`}>
+                      {s.estado === 'abierto' ? 'Abierto' : 'Cerrado'}
+                    </span>
+                    <p className="text-[11px] text-[var(--ink-soft)] mt-1.5 tabular">
+                      {s.participantes} inscritos
+                      {s.ganadores > 0 ? ` · ${s.ganadores} ganador` : ''}
+                    </p>
+                    <p className="text-[11px] text-[var(--ink-mute)]">
+                      {s.estado === 'abierto' ? `Cierra ${fecha(s.cierra_en)}` : `Cerró ${fecha(s.cierra_en)}`}
+                    </p>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+          {sorteoActivo && (
+            <div className="border-t border-[var(--line-soft)]">
+              <p className="px-5 pt-3 pb-1 text-[11px] uppercase tracking-wide text-[var(--ink-mute)]">
+                Últimas chances · {sorteoActivo.titulo}
+              </p>
+              <ul className="divide-y divide-[var(--line-soft)] max-h-[200px] overflow-y-auto">
+                {MOCK_INSCRIPTOS_SORTEO.map(c => {
+                  const wa = linkWhatsApp(
+                    c.telefono,
+                    `¡Hola${c.nombre ? ' ' + c.nombre.split(' ')[0] : ''}! Estás en el sorteo de La Sazón (${c.chances} chance${c.chances === 1 ? '' : 's'}). ¡Suerte!`,
+                  )
+                  return (
+                    <li key={c.id} className="px-5 py-2 flex items-center justify-between gap-3">
+                      <div>
+                        <Link href={`/clientes/${c.id}`} className="text-sm font-medium hover:underline">{c.nombre}</Link>
+                        <p className="text-[11px] text-[var(--ink-soft)]">{c.chances} chance{c.chances === 1 ? '' : 's'} · {haceCuanto(c.ultima_chance)}</p>
+                      </div>
+                      {wa && <a href={wa} target="_blank" rel="noopener noreferrer" className="btn btn-sm">WA</a>}
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          )}
+        </div>
+
+        <div className="card" id="por-pedido">
+          <div className="card-head">
+            <div>
+              <h2 className="h2">Premios por pedido</h2>
+              <p className="text-xs text-[var(--ink-soft)] mt-0.5">Se disparan con lo que hay en el ticket · mock</p>
+            </div>
+          </div>
+          <ul className="divide-y divide-[var(--line-soft)]">
+            {premiosPedido.map(r => (
+              <li key={r.id} className="px-5 py-3.5 flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">{r.nombre}</p>
+                  <p className="text-xs text-[var(--ink-soft)] mt-0.5">{r.condicion}</p>
+                  <p className="text-xs text-[var(--gold)] mt-1">{r.premio}</p>
+                </div>
+                <div className="text-right shrink-0 text-[11px] text-[var(--ink-soft)] tabular">
+                  <p><span className="font-semibold text-[var(--ink)]">{r.activos_hoy}</span> activos hoy</p>
+                  <p className="mt-0.5">{r.canjes_30d} canjes · 30 d</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-head">
+          <div>
+            <h2 className="h2">Cumpleaños de la semana</h2>
+            <p className="text-xs text-[var(--ink-soft)] mt-0.5">20% off · avisá por WhatsApp</p>
+          </div>
+        </div>
+        <ul className="divide-y divide-[var(--line-soft)]">
+          {cumples.map(c => {
+            const wa = linkWhatsApp(
+              c.telefono,
+              `¡Feliz cumple${c.nombre ? ' ' + c.nombre.split(' ')[0] : ''}! En La Sazón te regalamos 20% off esta semana${c.cupon ? ` · código ${c.cupon}` : ''}. ¡Te esperamos!`,
+            )
+            return (
+              <li key={c.id} className="px-5 py-2.5 flex items-center justify-between gap-3">
+                <div>
+                  <Link href={`/clientes/${c.id}`} className="text-sm font-medium hover:underline">{c.nombre}</Link>
+                  <p className="text-xs text-[var(--ink-soft)]">
+                    {c.dia}
+                    {c.cupon ? ` · cupón ${c.cupon}` : ' · aún sin cupón'}
+                  </p>
+                </div>
+                {wa && <a href={wa} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-ember">WhatsApp</a>}
+              </li>
+            )
+          })}
+        </ul>
+      </div>
+
       <ConfigFidelidadForm config={cfg} productos={productos} />
+      <MecanicasFidelidad items={MOCK_MECANICAS} />
 
       <div className="card">
         <div className="card-head"><h2 className="h2">Últimos cupones</h2></div>
@@ -145,7 +273,7 @@ export default async function FidelizacionPage() {
                     <td className="tabular text-xs tracking-wide">{c.codigo}</td>
                     <td><Link href={`/clientes/${c.cliente_id}`} className="hover:underline">{c.nombre ?? 'Sin nombre'}</Link></td>
                     <td className="text-sm">{describirPremio(c)}</td>
-                    <td className="text-xs">{c.origen === 'fidelidad' || c.origen === 'automatico' ? 'Por compras' : 'Regalo manual'}</td>
+                    <td className="text-xs">{labelOrigenCupon(c.origen)}</td>
                     <td className="text-xs whitespace-nowrap">{fecha(c.creado_en)}</td>
                     <td><span className={`chip ${ESTADO_CUPON[est].color}`}>{ESTADO_CUPON[est].label}</span></td>
                   </tr>
