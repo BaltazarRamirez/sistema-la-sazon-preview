@@ -92,8 +92,22 @@ export default function Sidebar({ contadores }: { contadores: Contadores }) {
         </form>
       </div>
 
-      <div className="px-6 py-4 border-t border-[var(--line-soft)] relative">
-        <p className="text-[10.5px] text-[var(--ink-mute)] tracking-wide">GIBEN IA · preview mock</p>
+      <div className="px-6 py-4 border-t border-[var(--line-soft)] relative flex justify-center">
+        <a
+          href="https://vireon.com.ar"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center opacity-55 hover:opacity-90 transition-opacity"
+          aria-label="Vireon"
+        >
+          <Image
+            src="/vireon-logo.svg"
+            alt="Vireon"
+            width={88}
+            height={12}
+            className="h-3 w-auto"
+          />
+        </a>
       </div>
     </>
   )

@@ -66,8 +66,19 @@ export default async function CartaPage({
 
       <CartaPedido productos={productos} categorias={categorias} mesa={mesa} recetas={recetas} />
 
-      <footer className="relative text-center px-5 pb-10 text-[11px] text-[var(--ink-mute)]">
-        Precios sujetos a cambio · Fotos provisionales · La Sazón
+      <footer className="relative text-center px-5 pb-10 space-y-3">
+        <p className="text-[11px] text-[var(--ink-mute)]">
+          Precios sujetos a cambio · Fotos provisionales · La Sazón
+        </p>
+        <a
+          href="https://vireon.com.ar"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex justify-center opacity-45 hover:opacity-80 transition-opacity"
+          aria-label="Vireon"
+        >
+          <Image src="/vireon-logo.svg" alt="Vireon" width={88} height={12} className="h-3 w-auto" />
+        </a>
       </footer>
     </div>
   )
