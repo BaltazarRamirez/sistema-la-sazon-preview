@@ -1,9 +1,11 @@
 import Link from 'next/link'
-import { q, q1 } from '@/lib/db'
 import { pesos } from '@/lib/formato'
-import { PERIODOS, parsePeriodo, rangoPeriodo } from '@/lib/periodo'
-import ListaVentas, { type VentaFila } from '@/components/ListaVentas'
+import { PERIODOS, parsePeriodo } from '@/lib/periodo'
+import ListaVentas from '@/components/ListaVentas'
+import ColaVentas from '@/components/ColaVentas'
+import HistorialMesas from '@/components/HistorialMesas'
 import PeriodoSelector from '@/components/PeriodoSelector'
+import { filtrarVentas, resumenMesas, resumenVentas } from '@/lib/mock/ventas'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,84 +14,99 @@ const POR_PAGINA = 25
 export default async function VentasPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string; estado?: string; q?: string; pagina?: string }>
+  searchParams: Promise<{ periodo?: string; estado?: string; q?: string; pagina?: string; vista?: string }>
 }) {
   const sp = await searchParams
   const periodo = parsePeriodo(sp.periodo, 'hoy')
-  const { inicio } = rangoPeriodo(periodo)
   const estado = sp.estado ?? ''
   const texto = (sp.q ?? '').trim()
   const pagina = Math.max(1, Number(sp.pagina) || 1)
+  const vista = sp.vista === 'lista' || sp.vista === 'mesas' || sp.vista === 'cola'
+    ? sp.vista
+    : (!estado && !texto && periodo === 'hoy' ? 'cola' : 'lista')
+  const cola = vista === 'cola'
+  const mesasVista = vista === 'mesas'
 
-  // Con un estado "en curso" mostramos todos los abiertos aunque sean de otro día
-  const desde = estado && estado !== 'entregado' && estado !== 'cancelado' ? new Date(0) : inicio
-  const filtros = `
-    p.creado_en >= $1
-    and ($2 = '' or p.estado = $2)
-    and ($3 = '' or cl.nombre ilike '%' || $3 || '%' or cl.telefono like '%' || $3 || '%' or p.numero::text = $3)`
-  const params = [desde.toISOString(), estado, texto]
+  const filtradas = filtrarVentas({
+    estado: cola || mesasVista ? '' : estado,
+    q: texto,
+    periodo: cola || mesasVista ? undefined : periodo,
+    soloCurso: cola,
+  })
+  const resumen = resumenVentas(cola || mesasVista ? filtrarVentas({ periodo }) : filtradas)
+  const ventas = cola ? filtradas : filtradas.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA)
+  const total = cola ? filtradas.length : resumen.cantidad
+  const validas = resumen.validas
+  const ticket = validas > 0 ? resumen.ingresos / validas : 0
+  const mesas = resumenMesas()
 
-  const [ventas, resumen] = await Promise.all([
-    q<VentaFila>(
-      `select p.id, p.numero, p.estado, p.canal, p.modalidad, p.medio_pago, p.subtotal, p.descuento, p.total,
-              p.notas, p.direccion_entrega, p.creado_en,
-              cl.id as cliente_id, cl.nombre as cliente_nombre, cl.telefono as cliente_telefono,
-              cu.codigo as cupon_codigo,
-              (select json_agg(json_build_object('nombre', pr.nombre, 'categoria', pr.categoria, 'tamano', pi.tamano,
-                                                 'cantidad', pi.cantidad, 'precio', pi.precio_unitario, 'regalo', pi.es_regalo)
-                               order by pi.es_regalo, pr.nombre)
-                 from pedido_items pi join productos pr on pr.id = pi.producto_id
-                where pi.pedido_id = p.id) as items,
-              (select coalesce(sum(pi.cantidad * pi.costo_unitario), 0) from pedido_items pi where pi.pedido_id = p.id) as costo
-         from pedidos p
-         left join clientes cl on cl.id = p.cliente_id
-         left join cupones cu on cu.id = p.cupon_id
-        where ${filtros}
-        order by p.creado_en desc
-        limit ${POR_PAGINA} offset ${(pagina - 1) * POR_PAGINA}`,
-      params
-    ),
-    q1<{ cantidad: number; validas: number; ingresos: number; descuentos: number }>(
-      `select count(*)::int as cantidad,
-              count(*) filter (where p.estado <> 'cancelado')::int as validas,
-              coalesce(sum(p.total) filter (where p.estado <> 'cancelado'), 0) as ingresos,
-              coalesce(sum(p.descuento) filter (where p.estado <> 'cancelado'), 0) as descuentos
-         from pedidos p left join clientes cl on cl.id = p.cliente_id
-        where ${filtros}`,
-      params
-    ),
-  ])
-
-  const total = resumen?.cantidad ?? 0
-  const validas = resumen?.validas ?? 0
-  const ticket = validas > 0 ? (resumen?.ingresos ?? 0) / validas : 0
+  const sub = mesasVista
+    ? 'Pedidos por mesa · total a cobrar'
+    : cola
+      ? 'Cola del momento'
+      : PERIODOS[periodo]
 
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="h1">Ventas</h1>
-          <p className="sub mt-1">{PERIODOS[periodo]}</p>
+          <p className="sub mt-1">{sub}</p>
         </div>
         <div className="flex gap-2 flex-wrap items-center">
-          <PeriodoSelector />
+          {vista === 'lista' && <PeriodoSelector />}
           <Link href="/ventas/nueva" className="btn btn-ember">+ Nueva venta</Link>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Resumen label="Ventas" valor={String(validas)} detalle={total > validas ? `${total - validas} canceladas` : undefined} />
-        <Resumen label="Ingresos" valor={pesos(resumen?.ingresos ?? 0)} />
-        <Resumen label="Ticket promedio" valor={pesos(ticket)} />
-        <Resumen label="Regalado con cupones" valor={pesos(resumen?.descuentos ?? 0)} />
+      <div className="flex gap-1 bg-[var(--paper-card)] border border-[var(--paper-line)] rounded-xl p-1 w-fit max-w-full overflow-x-auto">
+        {([
+          { id: 'cola', href: '/ventas?vista=cola', label: 'Cola' },
+          { id: 'mesas', href: '/ventas?vista=mesas', label: 'Mesas' },
+          { id: 'lista', href: '/ventas?vista=lista', label: 'Lista' },
+        ] as const).map(t => (
+          <Link
+            key={t.id}
+            href={t.href}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap ${
+              vista === t.id ? 'bg-[var(--ink)] text-[var(--void)]' : 'text-[var(--ink-soft)] hover:bg-white/[0.04]'
+            }`}
+          >
+            {t.label}
+          </Link>
+        ))}
       </div>
 
-      <ListaVentas
-        ventas={ventas}
-        pagina={pagina}
-        totalPaginas={Math.max(1, Math.ceil(total / POR_PAGINA))}
-        filtros={{ estado, q: texto }}
-      />
+      {vista === 'lista' && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Resumen label="Ventas" valor={String(validas)} detalle={total > validas ? `${total - validas} canceladas` : undefined} />
+          <Resumen label="Ingresos" valor={pesos(resumen.ingresos)} />
+          <Resumen label="Ticket promedio" valor={pesos(ticket)} />
+          <Resumen label="Regalado con cupones" valor={pesos(resumen.descuentos)} />
+        </div>
+      )}
+
+      {mesasVista && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Resumen label="Mesas del salón" valor="12" />
+          <Resumen label="Con pedidos" valor={String(mesas.length)} detalle={`${12 - mesas.length} libres`} />
+          <Resumen label="Total a cobrar" valor={pesos(mesas.reduce((a, m) => a + m.total, 0))} />
+          <Resumen label="Pedidos abiertos" valor={String(mesas.reduce((a, m) => a + m.abiertos, 0))} />
+        </div>
+      )}
+
+      {cola ? (
+        <ColaVentas ventas={ventas} />
+      ) : mesasVista ? (
+        <HistorialMesas mesas={mesas} />
+      ) : (
+        <ListaVentas
+          ventas={ventas}
+          pagina={pagina}
+          totalPaginas={Math.max(1, Math.ceil(total / POR_PAGINA))}
+          filtros={{ estado, q: texto }}
+        />
+      )}
     </div>
   )
 }

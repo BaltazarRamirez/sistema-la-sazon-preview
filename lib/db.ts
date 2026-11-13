@@ -1,67 +1,32 @@
 import 'server-only'
-import { Pool, PoolClient, types } from 'pg'
+import type { PoolClient } from 'pg'
 
-// numeric y bigint llegan como string por defecto: los pasamos a number.
-types.setTypeParser(1700, (v: string) => parseFloat(v))
-types.setTypeParser(20, (v: string) => parseInt(v, 10))
-// timestamptz → string ISO (se puede pasar tal cual a componentes de cliente)
-const parseTimestamptz = types.getTypeParser(1184)
-types.setTypeParser(1184, (v: string) => (parseTimestamptz(v) as Date).toISOString())
-// date → 'YYYY-MM-DD'
-types.setTypeParser(1082, (v: string) => v)
-
-const globalParaPool = globalThis as unknown as { _poolSazon?: Pool }
-
-export function getPool(): Pool {
-  if (!globalParaPool._poolSazon) {
-    const url = process.env.DATABASE_URL
-    if (!url) throw new Error('Falta configurar DATABASE_URL en las variables de entorno')
-    const local = /localhost|127\.0\.0\.1/.test(url)
-    globalParaPool._poolSazon = new Pool({
-      connectionString: url,
-      ssl: local ? false : { rejectUnauthorized: false },
-      max: Number(process.env.DB_POOL_MAX ?? 3),
-    })
-  }
-  return globalParaPool._poolSazon
-}
+// Preview mock: sin Postgres. Las páginas que aún no tienen mock
+// reciben arrays vacíos / null y muestran estados vacíos.
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type Fila = Record<string, any>
 
-export async function q<T = Fila>(sql: string, params: unknown[] = []): Promise<T[]> {
-  const res = await getPool().query(sql, params)
-  return res.rows as T[]
+export function getPool(): never {
+  throw new Error('Preview mock: no hay base de datos. Usá lib/mock.')
 }
 
-export async function q1<T = Fila>(sql: string, params: unknown[] = []): Promise<T | null> {
-  const rows = await q<T>(sql, params)
-  return rows[0] ?? null
+export async function q<T = Fila>(_sql: string, _params: unknown[] = []): Promise<T[]> {
+  return []
 }
 
-// Corre fn dentro de una transacción. Dentro de fn usar SOLO el client recibido.
-export async function tx<T>(fn: (c: PoolClient) => Promise<T>): Promise<T> {
-  const client = await getPool().connect()
-  try {
-    await client.query('begin')
-    const resultado = await fn(client)
-    await client.query('commit')
-    return resultado
-  } catch (err) {
-    await client.query('rollback').catch(() => {})
-    throw err
-  } finally {
-    client.release()
-  }
+export async function q1<T = Fila>(_sql: string, _params: unknown[] = []): Promise<T | null> {
+  return null
 }
 
-// Mensaje de error apto para mostrar en el panel
+export async function tx<T>(_fn: (c: PoolClient) => Promise<T>): Promise<T> {
+  throw new Error('Preview mock: las escrituras a base de datos no están disponibles.')
+}
+
 export function mensajeError(err: unknown, porDefecto = 'No se pudo guardar. Probá de nuevo.'): string {
-  if (err && typeof err === 'object' && 'code' in err) {
-    const code = (err as { code?: string }).code
-    if (code === '23505') return 'Ya existe un registro con ese nombre.'
-    if (code === '23503') return 'No se puede: está siendo usado en otro lado.'
-    if (code === 'P0001') return (err as { message?: string }).message ?? porDefecto
+  if (err && typeof err === 'object' && 'message' in err) {
+    const msg = String((err as { message?: string }).message ?? '')
+    if (msg.includes('Preview mock')) return 'Modo preview: esta acción aún no está conectada.'
   }
   console.error(err)
   return porDefecto

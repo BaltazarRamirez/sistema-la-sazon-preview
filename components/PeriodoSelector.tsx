@@ -22,13 +22,15 @@ export default function PeriodoSelector({ porDefecto = 'hoy' }: { porDefecto?: s
   }
 
   return (
-    <div className="flex gap-1 bg-[var(--paper-card)] border border-[var(--paper-line)] rounded-lg p-1">
+    <div className="flex gap-1 bg-[var(--surface)] border border-[var(--line-soft)] rounded-xl p-1">
       {OPCIONES.map(o => (
         <button
           key={o.value}
           onClick={() => elegir(o.value)}
-          className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-            actual === o.value ? 'bg-[var(--ink)] text-white' : 'text-[var(--ink-soft)] hover:bg-[var(--paper)]'
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+            actual === o.value
+              ? 'bg-[var(--gold)] text-[var(--void)]'
+              : 'text-[var(--ink-soft)] hover:bg-white/[0.04] hover:text-[var(--ink)]'
           }`}
         >
           {o.label}

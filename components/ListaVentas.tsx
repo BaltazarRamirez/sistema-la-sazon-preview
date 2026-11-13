@@ -5,7 +5,8 @@ import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { cambiarEstadoVenta } from '@/app/actions/ventas'
 import { CANALES, ESTADO_COLOR, ESTADO_LABEL, ESTADOS_VENTA, MEDIOS_PAGO, MODALIDADES, labelTamano } from '@/lib/catalogo'
-import { fechaHora, pesos } from '@/lib/formato'
+import { fechaHora, linkWhatsApp, pesos } from '@/lib/formato'
+import { labelAvanzar, siguienteEstado } from '@/lib/mock/ventas'
 import ConfirmModal from '@/components/ConfirmModal'
 
 export interface VentaFila {
@@ -25,6 +26,8 @@ export interface VentaFila {
   cliente_nombre: string | null
   cliente_telefono: string | null
   cupon_codigo: string | null
+  /** Pedido desde QR de mesa (carta pública). */
+  mesa?: number | null
   costo: number
   items: { nombre: string; categoria: string; tamano: string; cantidad: number; precio: number; regalo: boolean }[]
 }
@@ -127,15 +130,30 @@ export default function ListaVentas({
                       <p className="text-xs text-[var(--ink-soft)] mt-0.5 line-clamp-1">{resumen}</p>
                     </button>
                     <span className="text-sm font-semibold tabular w-24 text-right">{pesos(v.total)}</span>
-                    <select
-                      value={v.estado}
-                      disabled={guardando === v.id}
-                      onChange={e => (e.target.value === 'cancelado' ? setACancelar(v) : cambiarEstado(v, e.target.value))}
-                      className={`chip ${ESTADO_COLOR[v.estado]} border-0 cursor-pointer pr-1`}
-                      aria-label="Estado de la venta"
-                    >
-                      {ESTADOS_VENTA.map(e => <option key={e} value={e}>{ESTADO_LABEL[e]}</option>)}
-                    </select>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {labelAvanzar(v.estado, v.modalidad) && (
+                        <button
+                          type="button"
+                          disabled={guardando === v.id}
+                          onClick={() => {
+                            const n = siguienteEstado(v.estado, v.modalidad)
+                            if (n) cambiarEstado(v, n)
+                          }}
+                          className="btn btn-sm btn-primary"
+                        >
+                          {labelAvanzar(v.estado, v.modalidad)}
+                        </button>
+                      )}
+                      <select
+                        value={v.estado}
+                        disabled={guardando === v.id}
+                        onChange={e => (e.target.value === 'cancelado' ? setACancelar(v) : cambiarEstado(v, e.target.value))}
+                        className={`chip ${ESTADO_COLOR[v.estado]} border-0 cursor-pointer pr-1`}
+                        aria-label="Estado de la venta"
+                      >
+                        {ESTADOS_VENTA.map(e => <option key={e} value={e}>{ESTADO_LABEL[e]}</option>)}
+                      </select>
+                    </div>
                   </div>
 
                   {abierta === v.id && (
@@ -156,6 +174,18 @@ export default function ListaVentas({
                           {v.cliente_id ? <Link href={`/clientes/${v.cliente_id}`} className="link">{v.cliente_nombre ?? v.cliente_telefono}</Link> : 'Consumidor final'}
                         </Dato>
                         <Dato label="Pago">{MEDIOS_PAGO[v.medio_pago] ?? v.medio_pago}</Dato>
+                        {v.cliente_telefono && (
+                          <Dato label="WhatsApp">
+                            <a
+                              href={linkWhatsApp(v.cliente_telefono, `Hola${v.cliente_nombre ? ' ' + v.cliente_nombre.split(' ')[0] : ''}! Pedido #${v.numero} · ${pesos(v.total)}`) ?? '#'}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="link"
+                            >
+                              Avisar
+                            </a>
+                          </Dato>
+                        )}
                         {v.direccion_entrega && <Dato label="Dirección">{v.direccion_entrega}</Dato>}
                         {v.notas && <Dato label="Notas">{v.notas}</Dato>}
                         {v.descuento > 0 && <Dato label={`Cupón ${v.cupon_codigo ?? ''}`}>−{pesos(v.descuento)}</Dato>}

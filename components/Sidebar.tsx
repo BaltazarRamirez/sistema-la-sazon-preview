@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
@@ -32,7 +33,6 @@ export default function Sidebar({ contadores }: { contadores: Contadores }) {
   const pathname = usePathname()
   const [abierto, setAbierto] = useState(false)
 
-  // en el celular, el menú se cierra al tocar cualquier opción
   const cerrar = () => setAbierto(false)
 
   const nav = (
@@ -41,8 +41,10 @@ export default function Sidebar({ contadores }: { contadores: Contadores }) {
         <Link
           href="/ventas/nueva"
           onClick={cerrar}
-          className={`flex items-center justify-center gap-2 rounded-md py-2.5 text-[14px] font-semibold transition-colors ${
-            pathname.startsWith('/ventas/nueva') ? 'bg-[var(--ember-dark)] text-white' : 'bg-[var(--ember)] text-white hover:bg-[var(--ember-dark)]'
+          className={`flex items-center justify-center gap-2 rounded-xl py-2.5 text-[14px] font-semibold transition-all ${
+            pathname.startsWith('/ventas/nueva')
+              ? 'bg-[var(--ember-dark)] text-[var(--ink)]'
+              : 'bg-[var(--ember)] text-[var(--ink)] hover:bg-[var(--ember-dark)]'
           }`}
         >
           <span className="text-lg leading-none">+</span> Nueva venta
@@ -58,17 +60,17 @@ export default function Sidebar({ contadores }: { contadores: Contadores }) {
               key={href}
               href={href}
               onClick={cerrar}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-[13.5px] font-medium transition-colors border-l-2 ${
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13.5px] font-medium transition-colors border-l-2 ${
                 activo
-                  ? 'bg-white/[0.07] text-[#f7ede6] border-[var(--ember)]'
-                  : 'text-white/60 border-transparent hover:bg-white/[0.04] hover:text-white/85'
+                  ? 'bg-[var(--gold)]/10 text-[var(--ink)] border-[var(--gold)]'
+                  : 'text-[var(--ink-soft)] border-transparent hover:bg-white/[0.04] hover:text-[var(--ink)]'
               }`}
             >
               <Icon className="w-[17px] h-[17px] flex-shrink-0" />
               <span className="flex-1">{label}</span>
               {valor > 0 && (
                 <span className={`min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center ${
-                  alerta ? 'bg-[var(--ember)] text-white' : 'bg-white/15 text-white/85'
+                  alerta ? 'bg-[var(--danger)] text-white' : 'bg-white/10 text-[var(--ink)]'
                 }`}>
                   {valor}
                 </span>
@@ -82,7 +84,7 @@ export default function Sidebar({ contadores }: { contadores: Contadores }) {
         <form action={logout}>
           <button
             type="submit"
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-[13.5px] font-medium text-white/45 hover:bg-white/[0.04] hover:text-white/75 transition-colors"
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13.5px] font-medium text-[var(--ink-mute)] hover:bg-white/[0.04] hover:text-[var(--ink-soft)] transition-colors"
           >
             <IconSalir className="w-[17px] h-[17px] flex-shrink-0" />
             Cerrar sesión
@@ -90,24 +92,26 @@ export default function Sidebar({ contadores }: { contadores: Contadores }) {
         </form>
       </div>
 
-      <div className="px-6 py-4 border-t border-white/[0.08] relative">
-        <p className="text-[10.5px] text-white/30 tracking-wide">GIBEN IA · automatización</p>
+      <div className="px-6 py-4 border-t border-[var(--line-soft)] relative">
+        <p className="text-[10.5px] text-[var(--ink-mute)] tracking-wide">GIBEN IA · preview mock</p>
       </div>
     </>
   )
 
   return (
     <>
-      {/* Barra superior en celular */}
-      <header className="md:hidden sticky top-0 z-40 bg-[var(--char)] flex items-center justify-between px-4 h-14">
-        <Link href="/" className="font-display text-[20px] font-semibold text-[var(--ember)]">La Sazón</Link>
+      <header className="md:hidden sticky top-0 z-40 bg-[var(--void)]/95 backdrop-blur border-b border-[var(--line-soft)] flex items-center justify-between px-4 h-14">
+        <Link href="/" className="flex items-center gap-2.5 font-display text-[20px] font-bold tracking-tight">
+          <Image src="/logo-la-sazon.png" alt="" width={36} height={36} className="rounded-lg" />
+          La <span className="text-[var(--gold)]">Sazón</span>
+        </Link>
         <div className="flex items-center gap-2">
           <Link href="/ventas/nueva" className="btn btn-ember btn-sm">+ Venta</Link>
           <button
             onClick={() => setAbierto(v => !v)}
             aria-label={abierto ? 'Cerrar menú' : 'Abrir menú'}
             aria-expanded={abierto}
-            className="w-10 h-10 flex items-center justify-center text-white/80"
+            className="w-10 h-10 flex items-center justify-center text-[var(--ink)]/80"
           >
             <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               {abierto ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
@@ -117,9 +121,9 @@ export default function Sidebar({ contadores }: { contadores: Contadores }) {
       </header>
 
       {abierto && (
-        <div className="md:hidden fixed inset-0 z-30 bg-black/50" onClick={() => setAbierto(false)}>
+        <div className="md:hidden fixed inset-0 z-30 bg-black/60" onClick={() => setAbierto(false)}>
           <aside
-            className="absolute top-14 left-0 bottom-0 w-72 bg-[var(--char)] flex flex-col overflow-y-auto"
+            className="absolute top-14 left-0 bottom-0 w-72 bg-[var(--void)] flex flex-col overflow-y-auto border-r border-[var(--line-soft)]"
             onClick={e => e.stopPropagation()}
           >
             {nav}
@@ -127,15 +131,24 @@ export default function Sidebar({ contadores }: { contadores: Contadores }) {
         </div>
       )}
 
-      {/* Barra lateral en compu/tablet */}
-      <aside className="hidden md:flex w-60 flex-shrink-0 min-h-screen flex-col bg-[var(--char)] relative sticky top-0 h-screen overflow-y-auto">
-        <div
-          className="absolute inset-0 pointer-events-none opacity-[0.05]"
-          style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #fff 1px, transparent 0)', backgroundSize: '18px 18px' }}
-        />
-        <div className="px-6 pt-7 pb-5 border-b border-white/[0.08] relative">
-          <span className="font-display text-[22px] font-semibold text-[var(--ember)] tracking-tight">La Sazón</span>
-          <p className="text-[11px] text-white/40 mt-1 tracking-wide">Gestión del local</p>
+      <aside className="hidden md:flex w-60 flex-shrink-0 min-h-screen flex-col bg-[var(--void)] relative sticky top-0 h-screen overflow-y-auto border-r border-[var(--line-soft)]">
+        <div className="px-5 pt-6 pb-5 border-b border-[var(--line-soft)] relative">
+          <Link href="/" className="flex items-center gap-3 group">
+            <Image
+              src="/logo-la-sazon.png"
+              alt="La Sazón"
+              width={52}
+              height={52}
+              className="rounded-xl"
+              priority
+            />
+            <div>
+              <span className="font-display text-[1.25rem] font-extrabold tracking-tight text-[var(--ink)] leading-none block">
+                La <span className="text-[var(--gold)]">Sazón</span>
+              </span>
+              <p className="text-[11px] text-[var(--ink-mute)] mt-1.5 tracking-wide">Gestión del local</p>
+            </div>
+          </Link>
         </div>
         {nav}
       </aside>

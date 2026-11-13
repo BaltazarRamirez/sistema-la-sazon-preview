@@ -77,7 +77,9 @@ export default function TablaMenu({ productos }: { productos: ProductoMenu[] }) 
                   {items.map(p => (
                     <tr key={p.id} className={p.activo ? '' : 'opacity-50'}>
                       <td className="max-w-[340px]">
-                        <p className="font-medium">{p.nombre}</p>
+                        <Link href={`/menu/${p.id}`} className="font-medium hover:underline hover:text-[var(--gold)] transition-colors">
+                          {p.nombre}
+                        </Link>
                         {p.descripcion && <p className="text-xs text-[var(--ink-soft)] line-clamp-2">{p.descripcion}</p>}
                       </td>
                       {tamanos.map(t => {

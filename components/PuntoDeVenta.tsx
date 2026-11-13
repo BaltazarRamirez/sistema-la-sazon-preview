@@ -11,6 +11,9 @@ import {
 import { cantidad as fmtCantidad, fecha, linkWhatsApp, pesos } from '@/lib/formato'
 import { describirPremio, mensajeCupon } from '@/lib/premios'
 import { Barra, MensajeError } from '@/components/ui'
+import EditorHamburguesa from '@/components/EditorHamburguesa'
+import { precioMods, resumenMods, type ModLinea } from '@/lib/mock/agregados'
+import type { LineaRecetaMock } from '@/lib/mock/menu'
 
 export interface ProductoCaja {
   id: string
@@ -23,9 +26,11 @@ export interface ProductoCaja {
 }
 
 interface Linea {
+  key: string
   producto_id: string
   tamano: Tamano
   cantidad: number
+  mods: ModLinea[]
 }
 
 type Alcance = Record<string, Partial<Record<string, number | null>>>
@@ -34,10 +39,12 @@ export default function PuntoDeVenta({
   productos,
   alcance,
   fidelidad,
+  recetas,
 }: {
   productos: ProductoCaja[]
   alcance: Alcance
   fidelidad: { activo: boolean; compras_necesarias: number; mensaje: string | null }
+  recetas: Record<string, LineaRecetaMock[]>
 }) {
   const router = useRouter()
   const categorias = ORDEN_CATEGORIAS.filter(c => productos.some(p => p.categoria === c))
@@ -45,6 +52,7 @@ export default function PuntoDeVenta({
   const [categoria, setCategoria] = useState(categorias[0] ?? 'hamburguesa')
   const [filtro, setFiltro] = useState('')
   const [lineas, setLineas] = useState<Linea[]>([])
+  const [editando, setEditando] = useState<{ producto: ProductoCaja; tamano: Tamano; idx?: number } | null>(null)
 
   // cliente
   const [busqueda, setBusqueda] = useState('')
@@ -86,13 +94,36 @@ export default function PuntoDeVenta({
     return () => { vigente = false; clearTimeout(t) }
   }, [busqueda])
 
-  function agregar(producto_id: string, tamano: Tamano) {
+  function claveMods(mods: ModLinea[]) {
+    return mods.map(m => `${m.accion}:${m.insumo_id}:${m.cobrar ? 1 : 0}`).sort().join('|')
+  }
+
+  function agregar(producto_id: string, tamano: Tamano, mods: ModLinea[] = []) {
     setError(null)
+    const firma = claveMods(mods)
     setLineas(prev => {
-      const i = prev.findIndex(l => l.producto_id === producto_id && l.tamano === tamano)
+      const i = prev.findIndex(l => l.producto_id === producto_id && l.tamano === tamano && claveMods(l.mods) === firma)
       if (i >= 0) return prev.map((l, j) => (j === i ? { ...l, cantidad: l.cantidad + 1 } : l))
-      return [...prev, { producto_id, tamano, cantidad: 1 }]
+      return [...prev, { key: `${producto_id}-${tamano}-${firma || 'base'}-${Date.now()}`, producto_id, tamano, cantidad: 1, mods }]
     })
+  }
+
+  function elegirTamano(p: ProductoCaja, t: Tamano) {
+    if (p.categoria === 'hamburguesa' && (recetas[p.id]?.length ?? 0) > 0) {
+      setEditando({ producto: p, tamano: t })
+      return
+    }
+    agregar(p.id, t)
+  }
+
+  function confirmarArmado(mods: ModLinea[]) {
+    if (!editando) return
+    if (editando.idx != null) {
+      setLineas(prev => prev.map((l, i) => (i === editando.idx ? { ...l, mods, key: `${l.producto_id}-${l.tamano}-${claveMods(mods)}` } : l)))
+    } else {
+      agregar(editando.producto.id, editando.tamano, mods)
+    }
+    setEditando(null)
   }
 
   function cambiarCantidad(idx: number, delta: number) {
@@ -101,6 +132,11 @@ export default function PuntoDeVenta({
       const n = l.cantidad + delta
       return n <= 0 ? [] : [{ ...l, cantidad: n }]
     }))
+  }
+
+  function precioLinea(l: Linea) {
+    const p = porId.get(l.producto_id)
+    return (precioDe(p, l.tamano) ?? 0) + precioMods(l.mods)
   }
 
   function elegirCliente(c: ClienteCaja) {
@@ -118,7 +154,7 @@ export default function PuntoDeVenta({
     setCuponId(null)
   }
 
-  const subtotalProductos = lineas.reduce((acc, l) => acc + (precioDe(porId.get(l.producto_id), l.tamano) ?? 0) * l.cantidad, 0)
+  const subtotalProductos = lineas.reduce((acc, l) => acc + precioLinea(l) * l.cantidad, 0)
   const cupon = cliente?.cupones.find(c => c.id === cuponId) ?? null
   let descuento = 0
   let regalo: { nombre: string; precio: number; tamano: string; categoria: string } | null = null
@@ -158,7 +194,13 @@ export default function PuntoDeVenta({
       estado,
       direccion_entrega: modalidad === 'delivery' ? direccion.trim() : null,
       notas: notas.trim() || null,
-      items: lineas,
+      items: lineas.map(l => ({
+        producto_id: l.producto_id,
+        tamano: l.tamano,
+        cantidad: l.cantidad,
+        extra: precioMods(l.mods),
+        mods_resumen: resumenMods(l.mods) || null,
+      })),
       cupon_id: cuponId,
     })
     setEnviando(false)
@@ -231,7 +273,7 @@ export default function PuntoDeVenta({
                     return (
                       <button
                         key={t}
-                        onClick={() => agregar(p.id, t)}
+                        onClick={() => elegirTamano(p, t)}
                         className={`relative rounded-lg border px-2 py-2.5 text-center transition-colors active:scale-[0.98] ${
                           enCarrito > 0
                             ? 'border-[var(--ember)] bg-[color-mix(in_srgb,var(--ember)_8%,var(--paper-card))]'
@@ -278,17 +320,30 @@ export default function PuntoDeVenta({
             <ul className="space-y-2">
               {lineas.map((l, i) => {
                 const p = porId.get(l.producto_id)
-                const precio = precioDe(p, l.tamano) ?? 0
+                const precio = precioLinea(l)
+                const modsTxt = resumenMods(l.mods)
                 return (
-                  <li key={`${l.producto_id}-${l.tamano}`} className="flex items-center gap-2">
-                    <div className="flex items-center border border-[var(--paper-line)] rounded-md">
+                  <li key={l.key} className="flex items-start gap-2">
+                    <div className="flex items-center border border-[var(--paper-line)] rounded-md mt-0.5">
                       <button onClick={() => cambiarCantidad(i, -1)} className="w-7 h-7 text-[var(--ink-soft)] hover:text-[var(--ink)]" aria-label="Uno menos">−</button>
                       <span className="w-6 text-center text-sm font-semibold tabular">{l.cantidad}</span>
                       <button onClick={() => cambiarCantidad(i, 1)} className="w-7 h-7 text-[var(--ink-soft)] hover:text-[var(--ink)]" aria-label="Uno más">+</button>
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-[var(--ink)] truncate">{p?.nombre}</p>
-                      <p className="text-[11px] text-[var(--ink-soft)]">{p ? labelTamano(p.categoria, l.tamano) : l.tamano}</p>
+                      <p className="text-[11px] text-[var(--ink-soft)]">
+                        {p ? labelTamano(p.categoria, l.tamano) : l.tamano}
+                        {modsTxt ? ` · ${modsTxt}` : ''}
+                      </p>
+                      {p?.categoria === 'hamburguesa' && (
+                        <button
+                          type="button"
+                          onClick={() => setEditando({ producto: p, tamano: l.tamano, idx: i })}
+                          className="text-[11px] link mt-0.5"
+                        >
+                          Editar armado
+                        </button>
+                      )}
                     </div>
                     <span className="text-sm tabular">{pesos(precio * l.cantidad)}</span>
                   </li>
@@ -433,6 +488,17 @@ export default function PuntoDeVenta({
           <span className="text-white text-sm">{unidades} {unidades === 1 ? 'producto' : 'productos'} · <b className="tabular">{pesos(total)}</b></span>
           <a href="#ticket" className="btn btn-ember btn-sm">Ver ticket y cobrar</a>
         </div>
+      )}
+
+      {editando && (
+        <EditorHamburguesa
+          producto={editando.producto}
+          tamano={editando.tamano}
+          receta={recetas[editando.producto.id] ?? []}
+          inicial={editando.idx != null ? lineas[editando.idx]?.mods : undefined}
+          onClose={() => setEditando(null)}
+          onConfirm={confirmarArmado}
+        />
       )}
     </div>
   )

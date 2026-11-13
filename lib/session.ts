@@ -2,10 +2,8 @@ import 'server-only'
 import { SignJWT, jwtVerify } from 'jose'
 import { cookies } from 'next/headers'
 
-const secretKey = process.env.SESSION_SECRET
-if (!secretKey) {
-  throw new Error('Falta configurar SESSION_SECRET en las variables de entorno')
-}
+// En preview alcanza con un secreto local si no hay env.
+const secretKey = process.env.SESSION_SECRET || 'preview-la-sazon-session-secret-dev'
 const encodedKey = new TextEncoder().encode(secretKey)
 
 export interface SessionPayload {

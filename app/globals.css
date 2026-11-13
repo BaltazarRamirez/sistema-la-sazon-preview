@@ -1,47 +1,84 @@
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Public+Sans:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Syne:wght@500;600;700;800&display=swap');
 @import "tailwindcss";
 
+/* Base neutra cálida; verde del logo solo como acento (CTAs / ok). */
 :root {
-  /* superficie */
-  --char: #1c1815;
-  --char-raised: #262019;
-  --paper: #f6f1e7;
-  --paper-card: #fffcf5;
-  --paper-line: #e8dfcd;
-  --ink: #2a2420;
-  --ink-soft: #5c5244;
+  --void: #0f0e0c;
+  --char: #151311;
+  --char-raised: #1c1916;
+  --surface: #211e1a;
+  --surface-2: #2a2621;
+  --line: #3a342e;
+  --line-soft: rgba(247, 236, 216, 0.09);
 
-  /* marca */
-  --ember: #d94f2b;
-  --ember-dark: #b83f1f;
-  --mostaza: #c9962a;
+  --ink: #f5eee3;
+  --ink-soft: #a89f90;
+  --ink-mute: #71685c;
 
-  /* estado (semántico, separado del acento de marca) */
-  --ok: #4f7a44;
-  --ok-bg: #e9f0e4;
-  --warn: #9a6a12;
-  --warn-bg: #faf1dc;
-  --danger: #b5432f;
-  --danger-bg: #f8e8e3;
-  --info: #3d6b8c;
-  --info-bg: #e6eef3;
+  /* crema del logo */
+  --gold: #fce4b4;
+  --gold-dim: #d4bc8a;
+  /* verde marca — CTAs, no el fondo */
+  --ember: #1f6b3a;
+  --ember-dark: #15522c;
+  --mostaza: #fce4b4;
 
-  --background: var(--paper);
+  --ok: #5f9e58;
+  --ok-bg: rgba(95, 158, 88, 0.14);
+  --warn: #d4a84a;
+  --warn-bg: rgba(212, 168, 74, 0.14);
+  --danger: #c45c45;
+  --danger-bg: rgba(196, 92, 69, 0.14);
+  --info: #6a8f9e;
+  --info-bg: rgba(106, 143, 158, 0.14);
+
+  --paper: var(--char);
+  --paper-card: var(--surface);
+  --paper-line: var(--line);
+  --background: var(--char);
   --foreground: var(--ink);
 
-  --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
-  --font-sans: 'Public Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: 'Syne', system-ui, sans-serif;
+  --font-sans: 'DM Sans', system-ui, sans-serif;
+
+  --glow-gold: none;
+  --glow-ember: none;
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
+  background-image:
+    radial-gradient(ellipse 60% 40% at 0% 0%, rgba(31, 107, 58, 0.08), transparent 50%),
+    radial-gradient(ellipse 45% 30% at 100% 0%, rgba(252, 228, 180, 0.04), transparent 45%);
+  background-attachment: fixed;
 }
 
 .font-display {
   font-family: var(--font-display);
   text-wrap: balance;
+}
+
+.anim-fade-up {
+  animation: fade-up 0.4s ease-out both;
+}
+.anim-fade-up-d1 { animation-delay: 0.05s; }
+.anim-fade-up-d2 { animation-delay: 0.1s; }
+.anim-fade-up-d3 { animation-delay: 0.15s; }
+.anim-fade-up-d4 { animation-delay: 0.2s; }
+.anim-fade-in {
+  animation: fade-in 0.45s ease-out both;
 }
 
 table, .tabular {
@@ -51,15 +88,17 @@ table, .tabular {
 @layer components {
   .h1 {
     font-family: var(--font-display);
-    font-size: 28px;
-    line-height: 1.15;
-    font-weight: 600;
+    font-size: clamp(1.6rem, 2.4vw, 2rem);
+    line-height: 1.1;
+    font-weight: 700;
+    letter-spacing: -0.02em;
     color: var(--ink);
   }
   .h2 {
     font-family: var(--font-display);
-    font-size: 17px;
-    font-weight: 600;
+    font-size: 1.05rem;
+    font-weight: 650;
+    letter-spacing: -0.01em;
     color: var(--ink);
   }
   .sub {
@@ -67,20 +106,21 @@ table, .tabular {
     font-size: 0.875rem;
   }
   .eyebrow {
-    color: var(--ink-soft);
+    color: var(--gold-dim);
     font-size: 11px;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.1em;
   }
 
   .card {
-    background: var(--paper-card);
-    border: 1px solid var(--paper-line);
-    border-radius: 0.5rem;
+    background: var(--surface);
+    border: 1px solid var(--line-soft);
+    border-radius: 0.85rem;
   }
   .card-head {
-    padding: 0.875rem 1.5rem;
-    border-bottom: 1px solid var(--paper-line);
+    padding: 1rem 1.35rem;
+    border-bottom: 1px solid var(--line-soft);
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -93,59 +133,59 @@ table, .tabular {
     align-items: center;
     justify-content: center;
     gap: 0.375rem;
-    padding: 0.5rem 1rem;
-    border-radius: 0.5rem;
+    padding: 0.55rem 1.05rem;
+    border-radius: 0.55rem;
     font-size: 0.875rem;
-    font-weight: 500;
-    background: var(--paper);
+    font-weight: 600;
+    background: var(--surface-2);
     color: var(--ink);
-    border: 1px solid var(--paper-line);
+    border: 1px solid var(--line);
     transition: background-color 0.15s, border-color 0.15s, opacity 0.15s;
     white-space: nowrap;
     cursor: pointer;
   }
-  .btn:hover { background: var(--paper-line); }
+  .btn:hover { background: var(--line); }
   .btn:disabled { opacity: 0.45; cursor: not-allowed; }
   .btn-primary {
-    background: var(--ink);
-    color: #fff;
-    border-color: var(--ink);
+    background: var(--gold);
+    color: var(--void);
+    border-color: var(--gold);
   }
-  .btn-primary:hover { background: var(--char-raised); }
+  .btn-primary:hover { background: #fff0d0; }
   .btn-ember {
     background: var(--ember);
-    color: #fff;
-    border-color: var(--ember);
+    color: #f7ecd8;
+    border-color: transparent;
   }
   .btn-ember:hover { background: var(--ember-dark); }
   .btn-danger {
     background: var(--danger-bg);
     color: var(--danger);
-    border-color: color-mix(in srgb, var(--danger) 25%, transparent);
+    border-color: color-mix(in srgb, var(--danger) 30%, transparent);
   }
-  .btn-danger:hover { background: color-mix(in srgb, var(--danger) 15%, var(--paper-card)); }
+  .btn-danger:hover { background: color-mix(in srgb, var(--danger) 22%, transparent); }
   .btn-sm {
     padding: 0.3rem 0.65rem;
     font-size: 0.75rem;
-    border-radius: 0.375rem;
+    border-radius: 0.4rem;
   }
   .link {
-    color: var(--ember-dark);
+    color: var(--gold);
     font-weight: 500;
   }
-  .link:hover { text-decoration: underline; }
+  .link:hover { text-decoration: underline; color: #fff0d0; }
 
   .input {
     width: 100%;
-    border: 1px solid var(--paper-line);
-    border-radius: 0.5rem;
-    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--line);
+    border-radius: 0.55rem;
+    padding: 0.6rem 0.85rem;
     font-size: 0.875rem;
     color: var(--ink);
-    background: var(--paper-card);
+    background: var(--char);
   }
   .input:focus {
-    outline: 2px solid color-mix(in srgb, var(--ember) 35%, transparent);
+    outline: 2px solid color-mix(in srgb, var(--ember) 45%, transparent);
     outline-offset: 0;
     border-color: var(--ember);
   }
@@ -159,7 +199,7 @@ table, .tabular {
     font-weight: 600;
     color: var(--ink-soft);
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.06em;
     margin-bottom: 0.3rem;
   }
 
@@ -168,35 +208,35 @@ table, .tabular {
     font-size: 0.875rem;
   }
   .tabla thead tr {
-    background: var(--paper);
-    border-bottom: 1px solid var(--paper-line);
+    background: rgba(0, 0, 0, 0.18);
+    border-bottom: 1px solid var(--line-soft);
   }
   .tabla th {
     text-align: left;
-    padding: 0.65rem 1rem;
-    font-size: 0.7rem;
+    padding: 0.75rem 1rem;
+    font-size: 0.68rem;
     font-weight: 600;
-    color: var(--ink-soft);
+    color: var(--ink-mute);
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.06em;
     white-space: nowrap;
   }
   .tabla td {
-    padding: 0.7rem 1rem;
+    padding: 0.8rem 1rem;
     color: var(--ink);
     vertical-align: middle;
   }
-  .tabla tbody tr { border-top: 1px solid var(--paper-line); }
+  .tabla tbody tr { border-top: 1px solid var(--line-soft); }
   .tabla tbody tr:first-child { border-top: none; }
-  .tabla tbody tr:hover { background: color-mix(in srgb, var(--paper) 60%, transparent); }
+  .tabla tbody tr:hover { background: rgba(252, 228, 180, 0.04); }
   .tabla .num { text-align: right; white-space: nowrap; }
 
   .chip {
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
-    padding: 0.15rem 0.6rem;
-    border-radius: 999px;
+    padding: 0.2rem 0.65rem;
+    border-radius: 0.4rem;
     font-size: 0.72rem;
     font-weight: 600;
     white-space: nowrap;
@@ -205,13 +245,13 @@ table, .tabular {
   .chip-warn { background: var(--warn-bg); color: var(--warn); }
   .chip-danger { background: var(--danger-bg); color: var(--danger); }
   .chip-info { background: var(--info-bg); color: var(--info); }
-  .chip-neutral { background: var(--paper); color: var(--ink-soft); border: 1px solid var(--paper-line); }
-  .chip-ember { background: color-mix(in srgb, var(--ember) 12%, var(--paper-card)); color: var(--ember-dark); }
+  .chip-neutral { background: rgba(255,255,255,0.05); color: var(--ink-soft); border: 1px solid var(--line-soft); }
+  .chip-ember { background: color-mix(in srgb, var(--ember) 22%, transparent); color: var(--gold); }
 
   .barra {
     height: 6px;
     border-radius: 999px;
-    background: var(--paper-line);
+    background: rgba(255,255,255,0.08);
     overflow: hidden;
   }
   .barra > span {

@@ -1,11 +1,11 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { anularCompra, crearCompra, marcarPagada, recibirCompra } from '@/app/actions/compras'
+import { actualizarPreciosCompra, anularCompra, crearCompra, marcarPagada, recibirCompra } from '@/app/actions/compras'
 import { MEDIOS_PAGO } from '@/lib/catalogo'
-import { cantidad, duracionHoras, fecha, fechaHora, linkWhatsApp, num, pesos, plural } from '@/lib/formato'
+import { cantidad, duracionHoras, fecha, fechaHora, linkWhatsApp, num, pesos } from '@/lib/formato'
 import { Campo, MensajeError, Modal } from '@/components/ui'
 import ConfirmModal from '@/components/ConfirmModal'
 
@@ -70,7 +70,7 @@ export interface DatosFormCompra {
 
 export function mensajePedido(c: { proveedor_contacto: string | null; items: { nombre: string; cantidad_pedida: number; unidad_compra: string }[] }): string {
   const lineas = c.items.map(i => `• ${num(i.cantidad_pedida)} ${i.unidad_compra} de ${i.nombre}`).join('\n')
-  return `Hola${c.proveedor_contacto ? ' ' + c.proveedor_contacto : ''}! Te paso el pedido de La Sazón:\n${lineas}\n¿Me confirmás cuándo llega? Gracias!`
+  return `Hola${c.proveedor_contacto ? ' ' + c.proveedor_contacto : ''}! Te paso el pedido de La Sazón:\n\n${lineas}\n\n¿Me cotizás el total y me confirmás cuándo puede llegar? Gracias!`
 }
 
 export default function Compras({
@@ -91,11 +91,14 @@ export default function Compras({
   const router = useRouter()
   const pathname = usePathname()
   const params = useSearchParams()
+  const [lista, setLista] = useState(compras)
   const [nueva, setNueva] = useState(abrirNueva)
   const [abierta, setAbierta] = useState<string | null>(verId)
   const [recibiendo, setRecibiendo] = useState<CompraFila | null>(null)
   const [anulando, setAnulando] = useState<CompraFila | null>(null)
   const [aviso, setAviso] = useState<{ texto: string; wa?: string | null } | null>(null)
+
+  useEffect(() => { setLista(compras) }, [compras])
 
   function irA(f: string) {
     const p = new URLSearchParams(params.toString())
@@ -117,8 +120,14 @@ export default function Compras({
   }
 
   async function togglePagada(c: CompraFila) {
-    const r = await marcarPagada(c.id, !c.pagada, null)
-    if (r.error) setAviso({ texto: r.error })
+    const next = !c.pagada
+    setLista(prev => prev.map(x => x.id === c.id ? { ...x, pagada: next, medio_pago: next ? x.medio_pago : null } : x))
+    const r = await marcarPagada(c.id, next, null)
+    if (r.error) {
+      setLista(prev => prev.map(x => x.id === c.id ? { ...x, pagada: c.pagada, medio_pago: c.medio_pago } : x))
+      setAviso({ texto: r.error })
+      return
+    }
     router.refresh()
   }
 
@@ -136,21 +145,30 @@ export default function Compras({
       </div>
 
       {aviso && (
-        <div className="card px-4 py-3 text-sm bg-[var(--ok-bg)] border-[var(--ok)]/30 flex flex-wrap items-center justify-between gap-3">
-          <span>{aviso.texto}</span>
+        <div className={`card px-4 py-3.5 text-sm flex flex-wrap items-center justify-between gap-3 ${
+          aviso.wa ? 'bg-[var(--ok-bg)] border-[var(--ok)]/35' : 'bg-[var(--ok-bg)] border-[var(--ok)]/30'
+        }`}>
+          <div>
+            <p className="font-medium text-[var(--ink)]">{aviso.texto}</p>
+            {aviso.wa && <p className="text-xs text-[var(--ink-soft)] mt-0.5">Mandale el pedido ahora para que te cotice y confirme la entrega.</p>}
+          </div>
           <div className="flex gap-2 items-center">
-            {aviso.wa && <a href={aviso.wa} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-primary">Mandar pedido por WhatsApp</a>}
-            <button onClick={() => setAviso(null)} aria-label="Cerrar aviso" className="px-1">×</button>
+            {aviso.wa && (
+              <a href={aviso.wa} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-ember">
+                Abrir WhatsApp
+              </a>
+            )}
+            <button onClick={() => setAviso(null)} aria-label="Cerrar aviso" className="px-1 text-[var(--ink-soft)]">×</button>
           </div>
         </div>
       )}
 
       <div className="card overflow-hidden">
-        {compras.length === 0 ? (
+        {lista.length === 0 ? (
           <p className="px-6 py-10 text-center sub">No hay compras para mostrar.</p>
         ) : (
           <ul className="divide-y divide-[var(--paper-line)]">
-            {compras.map(c => {
+            {lista.map(c => {
               const atrasada = c.estado === 'pedida' && c.demora_prometida_horas != null && c.horas > c.demora_prometida_horas
               const tarde = c.estado === 'recibida' && c.demora_prometida_horas != null && c.horas > c.demora_prometida_horas
               const incompleta = c.estado === 'recibida' && c.items.some(i => (i.cantidad_recibida ?? 0) < i.cantidad_pedida)
@@ -161,7 +179,7 @@ export default function Compras({
                     <button onClick={() => setAbierta(abierta === c.id ? null : c.id)} className="flex-1 min-w-[230px] text-left">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-xs text-[var(--ink-soft)] tabular">#{c.numero}</span>
-                        <span className="text-sm font-semibold">{c.proveedor}</span>
+                        <span className={`text-sm font-semibold ${c.pagada ? 'line-through text-[var(--ink-soft)]' : ''}`}>{c.proveedor}</span>
                         <span className="text-xs text-[var(--ink-soft)]">· pedida {fechaHora(c.pedida_en)}</span>
                       </div>
                       <p className="text-xs text-[var(--ink-soft)] mt-0.5 line-clamp-1">
@@ -180,15 +198,19 @@ export default function Compras({
                       {incompleta && <span className="chip chip-warn">Incompleta</span>}
                       {c.estado === 'cancelada' && <span className="chip chip-danger">Anulada</span>}
                       {c.estado === 'recibida' && (
-                        <button onClick={() => togglePagada(c)} className={`chip ${c.pagada ? 'chip-ok' : 'chip-danger'} cursor-pointer`} title="Cambiar">
+                        <button
+                          onClick={() => togglePagada(c)}
+                          className={`chip ${c.pagada ? 'chip-ok line-through' : 'chip-danger'} cursor-pointer`}
+                          title={c.pagada ? 'Marcar como sin pagar' : 'Marcar como pagada'}
+                        >
                           {c.pagada ? 'Pagada' : 'Sin pagar'}
                         </button>
                       )}
                     </div>
-                    <span className="text-sm font-semibold tabular w-24 text-right">{pesos(c.total)}</span>
+                    <span className={`text-sm font-semibold tabular w-24 text-right ${c.pagada ? 'line-through text-[var(--ink-soft)]' : ''}`}>{pesos(c.total)}</span>
                     <div className="flex gap-1.5">
-                      {c.estado === 'pedida' && <button onClick={() => setRecibiendo(c)} className="btn btn-sm btn-primary">Recibir</button>}
-                      {wa && <a href={wa} target="_blank" rel="noopener noreferrer" className="btn btn-sm" title="Mandar el pedido por WhatsApp">WhatsApp</a>}
+                      {c.estado === 'pedida' && <button onClick={() => setRecibiendo(c)} className="btn btn-sm btn-primary">Precios / recibir</button>}
+                      {wa && <a href={wa} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-ember" title="Mandar el pedido por WhatsApp">WhatsApp</a>}
                     </div>
                   </div>
 
@@ -252,7 +274,18 @@ export default function Compras({
         <RecibirModal
           compra={recibiendo}
           onClose={() => setRecibiendo(null)}
-          onSaved={() => { setRecibiendo(null); setAviso({ texto: `Compra #${recibiendo.numero} recibida. El stock ya se actualizó.` }); router.refresh() }}
+          onSaved={(modo, pagada) => {
+            const n = recibiendo.numero
+            setRecibiendo(null)
+            setAviso({
+              texto: modo === 'precios'
+                ? `Precios del pedido #${n} actualizados. Sigue pendiente de recepción.`
+                : pagada
+                  ? `Compra #${n} recibida y marcada como pagada. El stock ya se actualizó.`
+                  : `Compra #${n} recibida. El stock ya se actualizó · queda sin pagar.`,
+            })
+            router.refresh()
+          }}
         />
       )}
       <ConfirmModal
@@ -359,10 +392,22 @@ function NuevaCompraModal({
   }))
   const total = valores.reduce((acc, l) => acc + (l.n > 0 && l.p >= 0 ? l.n * l.p : 0), 0)
 
-  async function guardar() {
+  function armarWhatsApp(items: { insumo_id: string; cantidad: number }[]) {
+    if (!proveedor) return null
+    return linkWhatsApp(proveedor.telefono, mensajePedido({
+      proveedor_contacto: proveedor.contacto,
+      items: items.map(i => {
+        const ins = insumosPorId.get(i.insumo_id)
+        return { nombre: ins?.nombre ?? '', cantidad_pedida: i.cantidad, unidad_compra: ins?.unidad_compra ?? '' }
+      }),
+    }))
+  }
+
+  async function guardar(abrirWa = false) {
     setError(null)
     if (!proveedorId) return setError('Elegí el proveedor.')
-    const items = valores.filter(l => l.insumo_id).map(l => ({ insumo_id: l.insumo_id, cantidad: l.n, precio: l.p }))
+    const items = valores.filter(l => l.insumo_id).map(l => ({ insumo_id: l.insumo_id, cantidad: l.n, precio: Number.isFinite(l.p) && l.p >= 0 ? l.p : 0 }))
+    if (items.some(i => !(i.cantidad > 0))) return setError('Revisá las cantidades.')
     setGuardando(true)
     const r = await crearCompra({
       proveedor_id: proveedorId,
@@ -377,16 +422,14 @@ function NuevaCompraModal({
     setGuardando(false)
     if (r.error) return setError(r.error)
 
-    const wa = !yaLlego && proveedor
-      ? linkWhatsApp(proveedor.telefono, mensajePedido({
-          proveedor_contacto: proveedor.contacto,
-          items: items.map(i => {
-            const ins = insumosPorId.get(i.insumo_id)
-            return { nombre: ins?.nombre ?? '', cantidad_pedida: i.cantidad, unidad_compra: ins?.unidad_compra ?? '' }
-          }),
-        }))
-      : null
-    onSaved(yaLlego ? `Compra #${r.numero} cargada y stock actualizado.` : `Pedido #${r.numero} a ${proveedor?.nombre} guardado. Cuando llegue, tocá "Recibir".`, wa)
+    const wa = !yaLlego ? armarWhatsApp(items) : null
+    if (abrirWa && wa) window.open(wa, '_blank', 'noopener,noreferrer')
+    onSaved(
+      yaLlego
+        ? `Compra #${r.numero} cargada y stock actualizado.`
+        : `Pedido #${r.numero} a ${proveedor?.nombre} guardado. Cuando te cotice y llegue, tocá "Recibir / cargar precios".`,
+      wa,
+    )
   }
 
   return (
@@ -474,7 +517,7 @@ function NuevaCompraModal({
             </div>
           ) : (
             <p className="text-xs text-[var(--ink-soft)]">
-              Queda como pendiente. Así se mide cuánto tarda el proveedor de verdad. Después de guardarla podés mandarle el pedido por WhatsApp.
+              Queda pendiente. Los precios pueden ser estimados: después le pedís cotización por WhatsApp y, al llegar, cargás los precios reales.
             </p>
           )}
           <input className="input input-sm" placeholder="Notas (opcional)" value={notas} onChange={e => setNotas(e.target.value)} />
@@ -482,14 +525,30 @@ function NuevaCompraModal({
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-lg font-bold tabular">Total {pesos(total)}</p>
+            <p className="text-lg font-bold tabular">Total {pesos(total)}{!yaLlego && total > 0 ? <span className="text-xs font-medium text-[var(--ink-soft)]"> · estimado</span> : null}</p>
             {proveedor?.pedido_minimo && total > 0 && total < proveedor.pedido_minimo ? (
               <p className="text-xs text-[var(--warn)]">No llega al pedido mínimo de {pesos(proveedor.pedido_minimo)}</p>
             ) : null}
+            {!yaLlego && proveedor && !proveedor.telefono && (
+              <p className="text-xs text-[var(--warn)]">Este proveedor no tiene WhatsApp cargado.</p>
+            )}
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap justify-end">
             <button onClick={onClose} className="btn">Cancelar</button>
-            <button onClick={guardar} disabled={guardando} className="btn btn-primary">{guardando ? 'Guardando...' : yaLlego ? 'Guardar y sumar al stock' : 'Guardar pedido'}</button>
+            {!yaLlego && proveedor?.telefono ? (
+              <>
+                <button onClick={() => guardar(false)} disabled={guardando} className="btn">
+                  {guardando ? 'Guardando...' : 'Sólo guardar'}
+                </button>
+                <button onClick={() => guardar(true)} disabled={guardando} className="btn btn-ember">
+                  {guardando ? 'Guardando...' : 'Guardar y WhatsApp'}
+                </button>
+              </>
+            ) : (
+              <button onClick={() => guardar(false)} disabled={guardando} className="btn btn-primary">
+                {guardando ? 'Guardando...' : yaLlego ? 'Guardar y sumar al stock' : 'Guardar pedido'}
+              </button>
+            )}
           </div>
         </div>
         <MensajeError error={error} />
@@ -498,62 +557,129 @@ function NuevaCompraModal({
   )
 }
 
-function RecibirModal({ compra, onClose, onSaved }: { compra: CompraFila; onClose: () => void; onSaved: () => void }) {
+function RecibirModal({
+  compra,
+  onClose,
+  onSaved,
+}: {
+  compra: CompraFila
+  onClose: () => void
+  onSaved: (modo: 'precios' | 'recibir', pagada?: boolean) => void
+}) {
   const [items, setItems] = useState(compra.items.map(i => ({ id: i.id, recibida: String(i.cantidad_pedida), precio: String(i.precio) })))
-  const [guardando, setGuardando] = useState(false)
+  const [pagada, setPagada] = useState(false)
+  const [medioPago, setMedioPago] = useState('efectivo')
+  const [guardando, setGuardando] = useState<'precios' | 'recibir' | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const total = items.reduce((acc, i) => acc + (Number(i.recibida.replace(',', '.')) || 0) * (Number(i.precio.replace(',', '.')) || 0), 0)
+  const totalEstimado = items.reduce((acc, i) => acc + compra.items.find(x => x.id === i.id)!.cantidad_pedida * (Number(i.precio.replace(',', '.')) || 0), 0)
+  const totalRecibido = items.reduce((acc, i) => acc + (Number(i.recibida.replace(',', '.')) || 0) * (Number(i.precio.replace(',', '.')) || 0), 0)
 
-  async function guardar() {
-    setGuardando(true)
+  async function guardarPrecios() {
+    setError(null)
+    setGuardando('precios')
+    const r = await actualizarPreciosCompra(
+      compra.id,
+      items.map(i => ({ id: i.id, precio: Number(i.precio.replace(',', '.')) })),
+    )
+    setGuardando(null)
+    if (r.error) return setError(r.error)
+    onSaved('precios')
+  }
+
+  async function confirmarRecepcion() {
+    setError(null)
+    setGuardando('recibir')
     const r = await recibirCompra(
       compra.id,
       items.map(i => ({ id: i.id, cantidad_recibida: Number(i.recibida.replace(',', '.')), precio: Number(i.precio.replace(',', '.')) })),
-      null
+      null,
+      { pagada, medio_pago: pagada ? medioPago : null },
     )
-    setGuardando(false)
+    setGuardando(null)
     if (r.error) return setError(r.error)
-    onSaved()
+    onSaved('recibir', pagada)
   }
 
   return (
     <Modal
       open
-      titulo={`Recibir compra #${compra.numero}`}
+      titulo={`Pedido #${compra.numero}`}
       subtitulo={`${compra.proveedor} · pedida ${fecha(compra.pedida_en)} · hace ${duracionHoras(compra.horas)}`}
       onClose={onClose}
       ancho="max-w-2xl"
     >
-      <div className="space-y-3">
-        <p className="text-xs text-[var(--ink-soft)]">Corregí lo que no llegó completo y el precio si la factura vino distinta.</p>
+      <div className="space-y-4">
+        <div className="rounded-xl border border-[var(--line-soft)] bg-white/[0.03] p-3 text-xs text-[var(--ink-soft)] space-y-1">
+          <p><b className="text-[var(--ink)]">1. Cotización:</b> actualizá precios cuando te pasen el valor. El pedido sigue pendiente.</p>
+          <p><b className="text-[var(--ink)]">2. Recepción:</b> cuando llega, confirmá cantidades. Podés marcarla pagada ahí mismo o dejarla pendiente.</p>
+        </div>
+
         <table className="tabla">
-          <thead><tr><th>Insumo</th><th className="num">Pedido</th><th>Llegó</th><th>Precio</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Insumo</th>
+              <th className="num">Pedido</th>
+              <th>Llegó</th>
+              <th>Precio</th>
+            </tr>
+          </thead>
           <tbody>
             {compra.items.map((i, idx) => (
               <tr key={i.id}>
                 <td>{i.nombre}</td>
                 <td className="num tabular">{num(i.cantidad_pedida)} {i.unidad_compra}</td>
                 <td>
-                  <input className="input input-sm w-24" inputMode="decimal" value={items[idx].recibida}
-                    onChange={e => setItems(prev => prev.map((x, j) => (j === idx ? { ...x, recibida: e.target.value } : x)))} />
+                  <input
+                    className="input input-sm w-24"
+                    inputMode="decimal"
+                    value={items[idx].recibida}
+                    onChange={e => setItems(prev => prev.map((x, j) => (j === idx ? { ...x, recibida: e.target.value } : x)))}
+                  />
                 </td>
                 <td>
-                  <input className="input input-sm w-28" inputMode="decimal" value={items[idx].precio}
-                    onChange={e => setItems(prev => prev.map((x, j) => (j === idx ? { ...x, precio: e.target.value } : x)))} />
+                  <input
+                    className="input input-sm w-28"
+                    inputMode="decimal"
+                    value={items[idx].precio}
+                    onChange={e => setItems(prev => prev.map((x, j) => (j === idx ? { ...x, precio: e.target.value } : x)))}
+                  />
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-        <p className="text-sm">Total a pagar: <b className="tabular">{pesos(total)}</b></p>
-        <p className="text-xs text-[var(--ink-soft)]">
-          Se suma al stock en {plural('unidad', 2)} de uso (por ejemplo kg de carne → bollos) y se registra la hora de llegada para medir la demora.
-        </p>
+
+        <div className="rounded-lg bg-[var(--paper)] p-3 flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input type="checkbox" checked={pagada} onChange={e => setPagada(e.target.checked)} />
+            Ya está pagada
+          </label>
+          {pagada && (
+            <select className="input input-sm w-auto" value={medioPago} onChange={e => setMedioPago(e.target.value)}>
+              {Object.entries(MEDIOS_PAGO).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          )}
+        </div>
+
+        <div className="text-sm space-y-0.5">
+          <p>Total cotizado: <b className="tabular">{pesos(totalEstimado)}</b></p>
+          <p className="text-xs text-[var(--ink-soft)]">
+            Si confirmás recepción: {pesos(totalRecibido)}
+            {pagada ? ' · se suma al stock y queda marcada como pagada' : ' · se suma al stock y queda sin pagar'}
+          </p>
+        </div>
+
         <MensajeError error={error} />
-        <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="btn">Cancelar</button>
-          <button onClick={guardar} disabled={guardando} className="btn btn-primary">{guardando ? 'Guardando...' : 'Confirmar recepción'}</button>
+
+        <div className="flex flex-wrap justify-end gap-2">
+          <button onClick={onClose} className="btn" disabled={!!guardando}>Cancelar</button>
+          <button onClick={guardarPrecios} disabled={!!guardando} className="btn">
+            {guardando === 'precios' ? 'Guardando...' : 'Actualizar precios'}
+          </button>
+          <button onClick={confirmarRecepcion} disabled={!!guardando} className="btn btn-primary">
+            {guardando === 'recibir' ? 'Guardando...' : 'Confirmar recepción'}
+          </button>
         </div>
       </div>
     </Modal>

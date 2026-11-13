@@ -4,6 +4,7 @@ export type Tamano = 'simple' | 'doble' | 'triple'
 export const TAMANOS: Tamano[] = ['simple', 'doble', 'triple']
 
 export const CATEGORIAS: Record<string, { label: string; tamanos: Partial<Record<Tamano, string>> }> = {
+  promo:          { label: 'Promos del día',  tamanos: { simple: 'Combo' } },
   hamburguesa:    { label: 'Hamburguesitas',  tamanos: { simple: 'Simple', doble: 'Doble', triple: 'Triple' } },
   pizzita:        { label: 'Pizzitas',        tamanos: { simple: '4 porc.', doble: '8 porc.' } },
   acompanamiento: { label: 'Acompañamientos', tamanos: { simple: 'Chica', doble: 'Grande' } },

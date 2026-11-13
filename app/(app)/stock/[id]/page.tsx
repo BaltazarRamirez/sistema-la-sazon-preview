@@ -1,75 +1,39 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { q, q1 } from '@/lib/db'
 import { cantidad, fecha, fechaHora, num, pesos, plural } from '@/lib/formato'
 import { TIPO_MOVIMIENTO, labelTamano, tamanosDe } from '@/lib/catalogo'
 import { medianocheAR } from '@/lib/periodo'
 import BarChart from '@/components/BarChart'
 import AccionesInsumo from '@/components/AccionesInsumo'
-import type { InsumoFila } from '@/components/TablaStock'
 import { estadoStock } from '@/lib/stock'
-import { SQL_PRECIO_VALIDO } from '@/lib/proveedores'
+import {
+  getConsumoSerieInsumo,
+  getInsumo,
+  getMovimientosInsumo,
+  getPreciosInsumo,
+  getUsosInsumo,
+  sugerirPedidoInsumo,
+} from '@/lib/mock/stock'
 
 export const dynamic = 'force-dynamic'
 
 export default async function InsumoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  if (!/^[0-9a-f-]{36}$/i.test(id)) notFound()
-
-  const insumo = await q1<InsumoFila>(
-    `select i.*, 0::numeric as consumo_diario, 0::numeric as en_camino, null::text as en_camino_de,
-            null::text as mejor_proveedor, null::numeric as mejor_precio, 0 as usos
-       from insumos i where i.id = $1`,
-    [id]
-  )
+  const insumo = getInsumo(id)
   if (!insumo) notFound()
 
   const desde = medianocheAR(13)
-  const [recetas, precios, movimientos, consumoDiario] = await Promise.all([
-    q<{ producto_id: string; nombre: string; categoria: string; cant_simple: number; cant_doble: number; cant_triple: number; precio_doble: number | null; precio_triple: number | null; activo: boolean }>(
-      `select p.id as producto_id, p.nombre, p.categoria, p.activo, p.precio_doble, p.precio_triple,
-              ri.cant_simple, ri.cant_doble, ri.cant_triple
-         from receta_items ri join productos p on p.id = ri.producto_id
-        where ri.insumo_id = $1 order by p.categoria, p.nombre`,
-      [id]
-    ),
-    q<{ proveedor_id: string; proveedor: string; precio: number; fecha: string; origen: string; anterior: number | null; demora_prometida_horas: number | null }>(
-      `select distinct on (pp.proveedor_id)
-              pp.proveedor_id, pr.nombre as proveedor, pp.precio, pp.fecha, pp.origen, pr.demora_prometida_horas,
-              (select pp2.precio from precios_proveedor pp2
-                where pp2.proveedor_id = pp.proveedor_id and pp2.insumo_id = pp.insumo_id and pp2.precio <> pp.precio
-                  and (pp2.fecha, pp2.creado_en) < (pp.fecha, pp.creado_en)
-                  and not exists (select 1 from compras ca where ca.id = pp2.compra_id and ca.estado = 'cancelada')
-                order by pp2.fecha desc, pp2.creado_en desc limit 1) as anterior
-         from precios_proveedor pp join proveedores pr on pr.id = pp.proveedor_id
-        where pp.insumo_id = $1 and pr.activo and ${SQL_PRECIO_VALIDO}
-        order by pp.proveedor_id, pp.fecha desc, pp.creado_en desc`,
-      [id]
-    ),
-    q<{ id: string; tipo: string; cantidad: number; nota: string | null; creado_en: string; venta_numero: number | null; compra_numero: number | null; compra_id: string | null }>(
-      `select m.id, m.tipo, m.cantidad, m.nota, m.creado_en, pe.numero as venta_numero, co.numero as compra_numero, co.id as compra_id
-         from movimientos_stock m
-         left join pedidos pe on pe.id = m.pedido_id
-         left join compras co on co.id = m.compra_id
-        where m.insumo_id = $1
-        order by m.creado_en desc limit 60`,
-      [id]
-    ),
-    q<{ dia: string; consumo: number }>(
-      `select to_char((m.creado_en at time zone 'America/Argentina/Buenos_Aires')::date, 'YYYY-MM-DD') as dia,
-              -sum(m.cantidad) as consumo
-         from movimientos_stock m
-        where m.insumo_id = $1 and m.tipo in ('venta', 'cancelacion') and m.creado_en >= $2
-        group by 1`,
-      [id, desde.toISOString()]
-    ),
-  ])
+  const recetas = getUsosInsumo(id)
+  const precios = getPreciosInsumo(id)
+  const movimientos = getMovimientosInsumo(id)
+  const consumoVals = getConsumoSerieInsumo(id)
+  const pedido = sugerirPedidoInsumo(id)
 
   const DIAS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
   const serie = Array.from({ length: 14 }, (_, k) => {
     const d = new Date(desde.getTime() + k * 86400000 + 12 * 3600000)
     const clave = d.toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' })
-    return { label: `${DIAS[d.getUTCDay()]} ${clave.slice(8)}`, value: Math.round(consumoDiario.find(c => c.dia === clave)?.consumo ?? 0) }
+    return { label: `${DIAS[d.getUTCDay()]} ${clave.slice(8)}`, value: consumoVals[k] ?? 0 }
   })
   const promedio = serie.reduce((a, s) => a + s.value, 0) / 14
   const est = estadoStock(insumo)
@@ -87,7 +51,19 @@ export default async function InsumoPage({ params }: { params: Promise<{ id: str
               {insumo.equivalencia !== 1 && ` (1 ${insumo.unidad_compra} = ${num(insumo.equivalencia)} ${plural(insumo.unidad, insumo.equivalencia)})`}
             </p>
           </div>
-          <AccionesInsumo insumo={insumo} />
+          <div className="flex gap-2 flex-wrap">
+            {pedido && (
+              <Link
+                href={`/compras?nueva=1&proveedor=${pedido.proveedor_id}`}
+                className="btn btn-ember"
+                title={pedido.viejo ? 'El precio cargado está viejo: conviene cotizar' : undefined}
+              >
+                Pedir a {pedido.proveedor.split(' ').slice(-2).join(' ')}
+                {pedido.viejo ? ' · cotizar' : ` · ${pesos(pedido.precio)}`}
+              </Link>
+            )}
+            <AccionesInsumo insumo={insumo} />
+          </div>
         </div>
       </div>
 
@@ -114,6 +90,14 @@ export default async function InsumoPage({ params }: { params: Promise<{ id: str
           <p className="text-xs text-[var(--ink-soft)]">al ritmo de venta actual</p>
         </div>
       </div>
+
+      {insumo.en_camino > 0 && (
+        <div className="card px-5 py-3.5 border-[var(--info)]/30 text-sm">
+          Hay <b>{cantidad(insumo.en_camino, insumo.unidad)}</b> en camino
+          {insumo.en_camino_de ? ` de ${insumo.en_camino_de}` : ''}.{' '}
+          <Link href="/compras?filtro=por_recibir" className="link">Ver pedidos →</Link>
+        </div>
+      )}
 
       {recetas.length > 0 && (
         <div className="card">
@@ -176,7 +160,7 @@ export default async function InsumoPage({ params }: { params: Promise<{ id: str
             <table className="tabla">
               <thead><tr><th>Proveedor</th><th className="num">Precio</th><th className="num">vs. más barato</th><th>Actualizado</th></tr></thead>
               <tbody>
-                {precios.sort((a, b) => a.precio - b.precio).map(p => {
+                {precios.map(p => {
                   const dif = masBarato ? ((p.precio - masBarato) / masBarato) * 100 : 0
                   const variacion = p.anterior ? ((p.precio - p.anterior) / p.anterior) * 100 : null
                   return (
@@ -189,7 +173,10 @@ export default async function InsumoPage({ params }: { params: Promise<{ id: str
                         )}
                       </td>
                       <td className="num">{dif < 0.5 ? <span className="chip chip-ok">Más barato</span> : <span className="text-[var(--danger)] text-xs font-semibold">+{num(dif, 1)}%</span>}</td>
-                      <td className="text-xs text-[var(--ink-soft)]">{fecha(p.fecha)}{p.origen === 'compra' ? ' · compra' : ''}</td>
+                      <td className="text-xs text-[var(--ink-soft)]">
+                        {fecha(p.fecha)}
+                        {p.viejo && <span className="text-[var(--warn)]"> · precio viejo</span>}
+                      </td>
                     </tr>
                   )
                 })}
@@ -200,20 +187,26 @@ export default async function InsumoPage({ params }: { params: Promise<{ id: str
       </div>
 
       <div className="card">
-        <div className="card-head"><h2 className="h2">Movimientos</h2><span className="text-xs text-[var(--ink-soft)]">últimos 60</span></div>
-        <div className="overflow-x-auto">
+        <div className="card-head"><h2 className="h2">Movimientos</h2><span className="text-xs text-[var(--ink-soft)]">últimos</span></div>
+        <div className="overflow-x-auto max-h-[320px] overflow-y-auto">
           <table className="tabla">
-            <thead><tr><th>Fecha</th><th>Tipo</th><th className="num">Cantidad</th><th>Detalle</th></tr></thead>
+            <thead className="sticky top-0 z-10 [&_tr]:bg-[var(--char-raised)]">
+              <tr><th>Fecha</th><th>Tipo</th><th className="num">Cantidad</th><th>Detalle</th></tr>
+            </thead>
             <tbody>
               {movimientos.map(m => (
                 <tr key={m.id}>
                   <td className="text-xs text-[var(--ink-soft)] whitespace-nowrap">{fechaHora(m.creado_en)}</td>
-                  <td><span className={`chip ${TIPO_MOVIMIENTO[m.tipo]?.color}`}>{TIPO_MOVIMIENTO[m.tipo]?.label ?? m.tipo}</span></td>
+                  <td><span className={`chip ${TIPO_MOVIMIENTO[m.tipo]?.color ?? 'chip-neutral'}`}>{TIPO_MOVIMIENTO[m.tipo]?.label ?? m.tipo}</span></td>
                   <td className={`num tabular font-medium ${m.cantidad < 0 ? 'text-[var(--danger)]' : 'text-[var(--ok)]'}`}>
                     {m.cantidad > 0 ? '+' : ''}{cantidad(m.cantidad, insumo.unidad)}
                   </td>
                   <td className="text-xs text-[var(--ink-soft)]">
-                    {m.venta_numero ? `Venta #${m.venta_numero}` : m.compra_numero ? <Link href={`/compras?ver=${m.compra_id}`} className="link">Compra #{m.compra_numero}</Link> : m.nota ?? ''}
+                    {m.venta_numero ? (
+                      <Link href={`/ventas?q=${m.venta_numero}`} className="link">Venta #{m.venta_numero}</Link>
+                    ) : m.compra_numero ? (
+                      <Link href={`/compras?ver=${m.compra_id}`} className="link">Compra #{m.compra_numero}</Link>
+                    ) : (m.nota ?? '')}
                   </td>
                 </tr>
               ))}

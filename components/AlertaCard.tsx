@@ -12,13 +12,13 @@ export default function AlertaCard({ count, label, detail, href, urgente = false
   return (
     <Link
       href={href}
-      className={`flex-1 min-w-[200px] rounded-lg border p-4 transition-colors ${
+      className={`flex-1 min-w-[200px] rounded-xl border p-4 transition-all hover:-translate-y-0.5 ${
         urgente
-          ? 'bg-[var(--danger-bg)] border-[var(--danger)]/30 hover:border-[var(--danger)]'
-          : 'bg-[var(--paper-card)] border-[var(--paper-line)] hover:border-[var(--ember)]/40'
+          ? 'bg-[var(--danger-bg)] border-[var(--danger)]/35 hover:border-[var(--danger)]'
+          : 'bg-[var(--surface)] border-[var(--line-soft)] hover:border-[var(--gold)]/40'
       }`}
     >
-      <p className={`font-display text-[26px] font-semibold tabular ${urgente ? 'text-[var(--danger)]' : 'text-[var(--ink)]'}`}>
+      <p className={`font-display text-[1.7rem] font-bold tabular ${urgente ? 'text-[var(--danger)]' : 'text-[var(--gold)]'}`}>
         {count}
       </p>
       <p className="text-sm font-medium text-[var(--ink)] mt-0.5">{label}</p>

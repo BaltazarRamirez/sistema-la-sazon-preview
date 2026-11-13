@@ -54,29 +54,111 @@ export default function TablaStock({ insumos }: { insumos: InsumoFila[] }) {
     .filter(i => !busqueda.trim() || i.nombre.toLowerCase().includes(busqueda.trim().toLowerCase()))
     .sort((a, b) => estadoStock(a).orden - estadoStock(b).orden || a.categoria.localeCompare(b.categoria) || a.nombre.localeCompare(b.nombre))
 
+  const hayFiltros = Boolean(busqueda.trim() || categoria || soloBajos || verInactivos)
+  const totalVisibles = insumos.filter(i => verInactivos || i.activo).length
+
+  function limpiarFiltros() {
+    setBusqueda('')
+    setCategoria('')
+    setSoloBajos(false)
+    setVerInactivos(false)
+  }
+
   return (
     <div className="card">
       <div className="card-head">
-        <h2 className="h2">Insumos</h2>
+        <div>
+          <h2 className="h2">Insumos</h2>
+          <p className="text-xs text-[var(--ink-soft)] mt-0.5">
+            {filas.length === totalVisibles
+              ? `${filas.length} insumos`
+              : `${filas.length} de ${totalVisibles}`}
+          </p>
+        </div>
         <button onClick={() => setEditando('nuevo')} className="btn btn-sm btn-primary">+ Nuevo insumo</button>
       </div>
-      <div className="px-4 md:px-5 py-3 flex flex-wrap gap-2 items-center border-b border-[var(--paper-line)]">
-        <input value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder="Buscar insumo..." className="input input-sm flex-1 min-w-[160px] max-w-xs" />
-        <select value={categoria} onChange={e => setCategoria(e.target.value)} className="input input-sm w-auto">
-          <option value="">Todas las categorías</option>
-          {categorias.map(c => <option key={c}>{c}</option>)}
-        </select>
-        <label className="flex items-center gap-1.5 text-xs text-[var(--ink-soft)] cursor-pointer">
-          <input type="checkbox" checked={soloBajos} onChange={e => setSoloBajos(e.target.checked)} /> Sólo bajo mínimo
-        </label>
-        <label className="flex items-center gap-1.5 text-xs text-[var(--ink-soft)] cursor-pointer">
-          <input type="checkbox" checked={verInactivos} onChange={e => setVerInactivos(e.target.checked)} /> Ver dados de baja
-        </label>
+
+      <div className="px-4 md:px-5 py-3.5 space-y-3 border-b border-[var(--line-soft)]">
+        <div className="relative max-w-md">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--ink-mute)] pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" />
+          </svg>
+          <input
+            value={busqueda}
+            onChange={e => setBusqueda(e.target.value)}
+            placeholder="Buscar por nombre..."
+            className="input input-sm w-full pl-9"
+          />
+          {busqueda && (
+            <button
+              type="button"
+              onClick={() => setBusqueda('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--ink-mute)] hover:text-[var(--ink)] text-sm leading-none px-1"
+              aria-label="Limpiar búsqueda"
+            >
+              ×
+            </button>
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            onClick={() => setCategoria('')}
+            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors ${
+              !categoria ? 'bg-[var(--gold)] text-[var(--void)]' : 'bg-white/[0.04] text-[var(--ink-soft)] hover:bg-white/[0.07] hover:text-[var(--ink)]'
+            }`}
+          >
+            Todas
+          </button>
+          {categorias.map(c => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setCategoria(categoria === c ? '' : c)}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors ${
+                categoria === c ? 'bg-[var(--gold)] text-[var(--void)]' : 'bg-white/[0.04] text-[var(--ink-soft)] hover:bg-white/[0.07] hover:text-[var(--ink)]'
+              }`}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setSoloBajos(v => !v)}
+            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors ${
+              soloBajos
+                ? 'bg-[var(--danger-bg)] border-[var(--danger)]/40 text-[var(--danger)]'
+                : 'border-[var(--line-soft)] text-[var(--ink-soft)] hover:border-[var(--line)] hover:text-[var(--ink)]'
+            }`}
+          >
+            Bajo mínimo
+          </button>
+          <button
+            type="button"
+            onClick={() => setVerInactivos(v => !v)}
+            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors ${
+              verInactivos
+                ? 'bg-white/[0.08] border-[var(--line)] text-[var(--ink)]'
+                : 'border-[var(--line-soft)] text-[var(--ink-soft)] hover:border-[var(--line)] hover:text-[var(--ink)]'
+            }`}
+          >
+            Dados de baja
+          </button>
+          {hayFiltros && (
+            <button type="button" onClick={limpiarFiltros} className="text-[11px] font-medium text-[var(--gold)] hover:underline ml-1">
+              Limpiar filtros
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto max-h-[320px] overflow-y-auto">
         <table className="tabla">
-          <thead>
+          <thead className="sticky top-0 z-10 [&_tr]:bg-[var(--char-raised)]">
             <tr>
               <th>Insumo</th>
               <th className="num">Stock</th>

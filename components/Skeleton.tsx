@@ -1,5 +1,5 @@
 export function SkeletonBlock({ className = '' }: { className?: string }) {
-  return <div className={`animate-pulse bg-[var(--paper-line)] rounded ${className}`} />
+  return <div className={`animate-pulse bg-white/[0.06] rounded-lg ${className}`} />
 }
 
 export function SkeletonTable({ rows = 6 }: { rows?: number }) {

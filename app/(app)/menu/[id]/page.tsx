@@ -1,55 +1,62 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { q, q1 } from '@/lib/db'
 import { labelCategoria } from '@/lib/catalogo'
-import EditorReceta, { type InsumoReceta, type LineaReceta, type ProductoReceta } from '@/components/EditorReceta'
+import { getProducto, getReceta, MOCK_PRODUCTOS } from '@/lib/mock/menu'
+import { MOCK_INSUMOS } from '@/lib/mock/stock'
+import HamburguesaArmada from '@/components/HamburguesaArmada'
 
 export const dynamic = 'force-dynamic'
 
 export default async function RecetaPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  if (!/^[0-9a-f-]{36}$/i.test(id)) notFound()
-
-  const producto = await q1<ProductoReceta>(
-    'select id, categoria, nombre, descripcion, precio_simple, precio_doble, precio_triple, activo from productos where id = $1',
-    [id]
-  )
+  const producto = getProducto(id)
   if (!producto) notFound()
 
-  const [insumos, recetas, otros] = await Promise.all([
-    q<InsumoReceta>('select id, nombre, categoria, unidad, costo_unitario, stock_actual, activo from insumos order by nombre'),
-    q<LineaReceta & { producto_id: string }>(
-      `select ri.producto_id, ri.insumo_id, ri.cant_simple, ri.cant_doble, ri.cant_triple
-         from receta_items ri join insumos i on i.id = ri.insumo_id
-        order by i.categoria, i.nombre`
-    ),
-    q<{ id: string; nombre: string; categoria: string }>(
-      `select p.id, p.nombre, p.categoria from productos p
-        where p.id <> $1 and exists (select 1 from receta_items ri where ri.producto_id = p.id)
-        order by (p.categoria = $2) desc, p.categoria, p.nombre`,
-      [id, producto.categoria]
-    ),
-  ])
+  const receta = getReceta(id)
+  const insumos = MOCK_INSUMOS.map(i => ({
+    id: i.id,
+    nombre: i.nombre,
+    unidad: i.unidad,
+    costo_unitario: i.costo_unitario,
+    stock_actual: i.stock_actual,
+  }))
 
-  const recetasPorProducto: Record<string, LineaReceta[]> = {}
-  for (const r of recetas) {
-    const { producto_id, ...linea } = r
-    ;(recetasPorProducto[producto_id] ??= []).push(linea)
-  }
+  const hermanos = MOCK_PRODUCTOS
+    .filter(p => p.categoria === producto.categoria && p.id !== producto.id && p.activo)
+    .slice(0, 8)
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link href="/menu" className="text-xs link">← Menú y recetas</Link>
-        <h1 className="h1 mt-1">{producto.nombre}</h1>
-        <p className="sub mt-1">{labelCategoria(producto.categoria)}{producto.descripcion ? ` · ${producto.descripcion}` : ''}</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <Link href="/menu" className="text-xs link">← Menú y recetas</Link>
+          <h1 className="h1 mt-1">{producto.nombre}</h1>
+          <p className="sub mt-1">
+            {labelCategoria(producto.categoria)}
+            {producto.descripcion ? ` · ${producto.descripcion}` : ''}
+          </p>
+        </div>
+        {!producto.activo && <span className="chip chip-neutral">Desactivado</span>}
       </div>
-      <EditorReceta
-        producto={producto}
-        inicial={recetasPorProducto[id] ?? []}
-        insumos={insumos}
-        otros={otros.map(o => ({ ...o, receta: recetasPorProducto[o.id] ?? [] }))}
-      />
+
+      {receta.length === 0 ? (
+        <div className="card px-6 py-10 text-center sub">Todavía no hay receta cargada para este producto.</div>
+      ) : (
+        <HamburguesaArmada producto={producto} receta={receta} insumos={insumos} />
+      )}
+
+      {hermanos.length > 0 && (
+        <div>
+          <p className="eyebrow mb-2">Otras {labelCategoria(producto.categoria).toLowerCase()}s</p>
+          <div className="flex flex-wrap gap-2">
+            {hermanos.map(p => (
+              <Link key={p.id} href={`/menu/${p.id}`} className="chip chip-neutral hover:border-[var(--gold)]/40 transition-colors">
+                {p.nombre}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

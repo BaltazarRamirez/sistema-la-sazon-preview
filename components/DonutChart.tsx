@@ -17,7 +17,15 @@ export default function DonutChart({ data }: Props) {
             <Pie data={data} cx="50%" cy="50%" innerRadius="65%" outerRadius="100%" dataKey="value" nameKey="label" paddingAngle={2}>
               {data.map((entry, i) => <Cell key={i} fill={entry.color} stroke="none" />)}
             </Pie>
-            <Tooltip contentStyle={{ backgroundColor: '#2a2420', border: '1px solid #3d352b', borderRadius: '6px', color: '#f6f1e7', fontSize: '12px' }} />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: '#1c1815',
+                border: '1px solid rgba(255,236,210,0.12)',
+                borderRadius: '10px',
+                color: '#f4ebe0',
+                fontSize: '12px',
+              }}
+            />
           </PieChart>
         </ResponsiveContainer>
       </div>

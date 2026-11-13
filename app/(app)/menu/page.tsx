@@ -1,38 +1,77 @@
-import { q } from '@/lib/db'
-import TablaMenu, { type ProductoMenu } from '@/components/TablaMenu'
+import Link from 'next/link'
+import TablaMenu from '@/components/TablaMenu'
+import TablaAgregados from '@/components/TablaAgregados'
+import CartaQrAdmin from '@/components/CartaQrAdmin'
+import { listAgregados } from '@/lib/mock/agregados'
+import { MOCK_PRODUCTOS } from '@/lib/mock/menu'
 
 export const dynamic = 'force-dynamic'
 
-export default async function MenuPage() {
-  const productos = await q<ProductoMenu>(`
-    select p.id, p.categoria, p.nombre, p.descripcion, p.precio_simple, p.precio_doble, p.precio_triple, p.activo,
-           v.costo_simple, v.costo_doble, v.costo_triple, v.insumos_en_receta,
-           coalesce(s.vendidas, 0)::int as vendidas_30d
-      from productos p
-      join v_costo_receta v on v.producto_id = p.id
-      left join (
-        select pi.producto_id, sum(pi.cantidad) as vendidas
-          from pedido_items pi join pedidos pe on pe.id = pi.pedido_id
-         where pe.estado <> 'cancelado' and pe.creado_en >= now() - interval '30 days' and not pi.es_regalo
-         group by pi.producto_id
-      ) s on s.producto_id = p.id
-     order by p.categoria, p.nombre
-  `)
+const SECCIONES = [
+  { id: 'productos', label: 'Productos' },
+  { id: 'agregados', label: 'Agregados' },
+  { id: 'carta', label: 'Carta (QR)' },
+] as const
+
+type Seccion = (typeof SECCIONES)[number]['id']
+
+export default async function MenuPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ vista?: string }>
+}) {
+  const { vista } = await searchParams
+  const seccion: Seccion = SECCIONES.some(s => s.id === vista) ? (vista as Seccion) : 'productos'
+
+  const productos = MOCK_PRODUCTOS
   const sinReceta = productos.filter(p => p.activo && p.insumos_en_receta === 0)
+  const agregados = listAgregados(true)
+
+  const sub =
+    seccion === 'agregados'
+      ? 'Extras y toppings que se suman o sacan al armar en caja.'
+        : seccion === 'carta'
+        ? 'Link y QR para la carta (promos, burgers, pizzas, bebidas). Historial de mesa en Ventas → Mesas.'
+        : 'Precios, costo de cada producto según su receta y margen por tamaño.'
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="h1">Menú y recetas</h1>
-        <p className="sub mt-1">Precios, costo de cada producto según su receta y margen por tamaño.</p>
+        <p className="sub mt-1">{sub}</p>
       </div>
-      {sinReceta.length > 0 && (
-        <div className="card px-5 py-3 bg-[var(--warn-bg)] border-[var(--warn)]/30 text-sm">
-          <b className="text-[var(--warn)]">{sinReceta.length} {sinReceta.length === 1 ? 'producto no tiene' : 'productos no tienen'} receta:</b>{' '}
-          {sinReceta.map(p => p.nombre).join(', ')}. Sus ventas no descuentan stock hasta que la cargues.
-        </div>
+
+      <div className="flex gap-1.5 bg-[var(--char)] border border-[var(--line-soft)] rounded-xl p-1 w-fit max-w-full overflow-x-auto">
+        {SECCIONES.map(s => (
+          <Link
+            key={s.id}
+            href={s.id === 'productos' ? '/menu' : `/menu?vista=${s.id}`}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
+              seccion === s.id
+                ? 'bg-[var(--gold)] text-[var(--void)]'
+                : 'text-[var(--ink-soft)] hover:bg-white/[0.04] hover:text-[var(--ink)]'
+            }`}
+          >
+            {s.label}
+          </Link>
+        ))}
+      </div>
+
+      {seccion === 'productos' && (
+        <>
+          {sinReceta.length > 0 && (
+            <div className="card px-5 py-3 bg-[var(--warn-bg)] border-[var(--warn)]/30 text-sm">
+              <b className="text-[var(--warn)]">{sinReceta.length} {sinReceta.length === 1 ? 'producto no tiene' : 'productos no tienen'} receta:</b>{' '}
+              {sinReceta.map(p => p.nombre).join(', ')}. Sus ventas no descuentan stock hasta que la cargues.
+            </div>
+          )}
+          <TablaMenu productos={productos} />
+        </>
       )}
-      <TablaMenu productos={productos} />
+
+      {seccion === 'agregados' && <TablaAgregados items={agregados} />}
+
+      {seccion === 'carta' && <CartaQrAdmin />}
     </div>
   )
 }
