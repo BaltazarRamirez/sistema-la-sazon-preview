@@ -34,7 +34,16 @@ function costoDe(p: ProductoMenu, t: Tamano) {
   return t === 'simple' ? p.costo_simple : t === 'doble' ? p.costo_doble : p.costo_triple
 }
 
-export default function TablaMenu({ productos }: { productos: ProductoMenu[] }) {
+const SIN_RECETA = new Set(['bebida', 'acompanamiento', 'postre'])
+
+export default function TablaMenu({
+  productos,
+  contenidoPromo = {},
+}: {
+  productos: ProductoMenu[]
+  /** Cantidad de productos del menú incluidos en cada promo. */
+  contenidoPromo?: Record<string, number>
+}) {
   const router = useRouter()
   const [editando, setEditando] = useState<ProductoMenu | 'nuevo' | null>(null)
   const [verInactivos, setVerInactivos] = useState(true)
@@ -68,13 +77,27 @@ export default function TablaMenu({ productos }: { productos: ProductoMenu[] }) 
                     <th>Producto</th>
                     {tamanos.map(t => <th key={t} className="num">{labelTamano(cat, t)}</th>)}
                     <th className="num">Vendidas 30 d</th>
-                    <th>Receta</th>
+                    <th>{cat === 'promo' ? 'Incluye' : 'Receta'}</th>
                     <th>Activo</th>
                     <th></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map(p => (
+                  {items.map(p => {
+                    const nPromo = contenidoPromo[p.id] ?? 0
+                    let chipReceta: { className: string; label: string }
+                    if (p.categoria === 'promo') {
+                      chipReceta = nPromo > 0
+                        ? { className: 'chip-neutral', label: `${nPromo} ${nPromo === 1 ? 'producto' : 'productos'}` }
+                        : { className: 'chip-warn', label: 'Cargar productos' }
+                    } else if (SIN_RECETA.has(p.categoria)) {
+                      chipReceta = { className: 'chip-neutral', label: 'Sin receta' }
+                    } else if (p.insumos_en_receta > 0) {
+                      chipReceta = { className: 'chip-neutral', label: `${p.insumos_en_receta} insumos` }
+                    } else {
+                      chipReceta = { className: 'chip-warn', label: 'Cargar receta' }
+                    }
+                    return (
                     <tr key={p.id} className={p.activo ? '' : 'opacity-50'}>
                       <td className="max-w-[340px]">
                         <Link href={`/menu/${p.id}`} className="font-medium hover:underline hover:text-[var(--gold)] transition-colors">
@@ -100,8 +123,8 @@ export default function TablaMenu({ productos }: { productos: ProductoMenu[] }) 
                       })}
                       <td className="num tabular">{p.vendidas_30d}</td>
                       <td>
-                        <Link href={`/menu/${p.id}`} className={`chip ${p.insumos_en_receta > 0 ? 'chip-neutral' : 'chip-warn'} hover:underline`}>
-                          {p.insumos_en_receta > 0 ? `${p.insumos_en_receta} insumos` : 'Cargar receta'}
+                        <Link href={`/menu/${p.id}`} className={`chip ${chipReceta.className} hover:underline`}>
+                          {chipReceta.label}
                         </Link>
                       </td>
                       <td>
@@ -111,7 +134,8 @@ export default function TablaMenu({ productos }: { productos: ProductoMenu[] }) 
                         <button onClick={() => setEditando(p)} className="btn btn-sm">Editar</button>
                       </td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

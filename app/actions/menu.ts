@@ -10,6 +10,7 @@ import {
   type AgregadoDef,
 } from '@/lib/mock/agregados'
 import { guardarRecetaMock, type CapaVisual, type LineaRecetaMock } from '@/lib/mock/menu'
+import { guardarPromoItemsMock, type PromoItem } from '@/lib/mock/promos'
 
 export interface DatosProducto {
   categoria: string
@@ -118,6 +119,20 @@ export async function guardarReceta(productoId: string, items: ItemReceta[]): Pr
     }
   })
   guardarRecetaMock(productoId, lineas)
+  revalidatePath('/', 'layout')
+  return { ok: true }
+}
+
+/** Preview mock: contenido de promo = productos del menú (no insumos). */
+export async function guardarPromo(promoId: string, items: PromoItem[]): Promise<Resultado> {
+  await verifySession()
+  if (!promoId) return { error: 'Promo inválida.' }
+  for (const i of items) {
+    if (!i.producto_id) return { error: 'Elegí un producto en cada fila.' }
+    if (!(i.cantidad > 0)) return { error: 'Las cantidades tienen que ser mayores a 0.' }
+    if (!['simple', 'doble', 'triple'].includes(i.tamano)) return { error: 'Tamaño inválido.' }
+  }
+  guardarPromoItemsMock(promoId, items)
   revalidatePath('/', 'layout')
   return { ok: true }
 }

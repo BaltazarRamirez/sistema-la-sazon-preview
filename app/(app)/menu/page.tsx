@@ -4,6 +4,7 @@ import TablaAgregados from '@/components/TablaAgregados'
 import CartaQrAdmin from '@/components/CartaQrAdmin'
 import { listAgregados } from '@/lib/mock/agregados'
 import { MOCK_PRODUCTOS } from '@/lib/mock/menu'
+import { cantidadItemsPromo } from '@/lib/mock/promos'
 
 export const dynamic = 'force-dynamic'
 
@@ -69,7 +70,12 @@ export default async function MenuPage({
               {sinReceta.map(p => p.nombre).join(', ')}. Sus ventas no descuentan stock hasta que la cargues.
             </div>
           )}
-          <TablaMenu productos={productos} />
+          <TablaMenu
+            productos={productos}
+            contenidoPromo={Object.fromEntries(
+              productos.filter(p => p.categoria === 'promo').map(p => [p.id, cantidadItemsPromo(p.id)]),
+            )}
+          />
         </>
       )}
 
