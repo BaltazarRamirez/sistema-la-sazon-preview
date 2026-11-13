@@ -14,6 +14,7 @@ import { CapaFila, labelCapa } from '@/components/CapasIngredientes'
 import CartaNav from '@/components/CartaNav'
 import EditorHamburguesa from '@/components/EditorHamburguesa'
 import EditorPizzita from '@/components/EditorPizzita'
+import PromoArmar from '@/components/PromoArmar'
 
 function esEditableCarta(categoria: string) {
   return categoria === 'hamburguesa' || categoria === 'pizzita'
@@ -34,6 +35,8 @@ type Linea = {
   mods: ModLinea[]
   mods_resumen: string
   extra: number
+  precio_override?: number | null
+  promo_nombre?: string | null
 }
 
 function capasPreview(receta: LineaRecetaMock[], tamano: Tamano): { capa: CapaVisual; etiqueta: string }[] {
@@ -87,6 +90,7 @@ export default function CartaPedido({
   const [detalle, setDetalle] = useState<ProductoMenu | null>(null)
   const [tamanoDet, setTamanoDet] = useState<Tamano>('simple')
   const [editando, setEditando] = useState<{ producto: ProductoMenu; tamano: Tamano; inicial?: ModLinea[]; key?: string } | null>(null)
+  const [armarPromo, setArmarPromo] = useState<ProductoMenu | null>(null)
   const [nombre, setNombre] = useState('')
   const [telefono, setTelefono] = useState('')
   const [direccion, setDireccion] = useState('')
@@ -108,28 +112,37 @@ export default function CartaPedido({
     return mods.map(m => `${m.accion}:${m.insumo_id}:${m.cobrar ? 1 : 0}`).sort().join('|')
   }
 
+  function pushLinea(linea: Omit<Linea, 'key'> & { key?: string }) {
+    const key = linea.key ?? `${linea.producto_id}-${linea.tamano}-${keyMods(linea.mods)}-${linea.promo_nombre ?? ''}-${Date.now()}`
+    setCarrito(prev => {
+      if (!linea.promo_nombre) {
+        const hit = prev.find(l => l.key === key)
+        if (hit) return prev.map(l => (l.key === key ? { ...l, cantidad: Math.min(99, l.cantidad + 1) } : l))
+      }
+      return [...prev, { ...linea, key }]
+    })
+  }
+
   function agregar(p: ProductoMenu, tamano: Tamano, mods: ModLinea[] = []) {
+    if (p.categoria === 'promo') {
+      setDetalle(null)
+      setArmarPromo(p)
+      return
+    }
     const precioBase = precioDe(p, tamano)
     if (precioBase == null) return
     const extra = precioMods(mods)
-    const promo = p.categoria === 'promo' ? detallePromo(p.id) : null
-    const resumen = resumenMods(mods) || (promo ? promo.incluye.join(' · ') : '')
-    const key = `${p.id}-${tamano}-${keyMods(mods)}`
-    setCarrito(prev => {
-      const hit = prev.find(l => l.key === key)
-      if (hit) return prev.map(l => (l.key === key ? { ...l, cantidad: Math.min(99, l.cantidad + 1) } : l))
-      return [...prev, {
-        key,
-        producto_id: p.id,
-        nombre: p.nombre,
-        categoria: p.categoria,
-        tamano,
-        precio: precioBase + extra,
-        cantidad: 1,
-        mods,
-        mods_resumen: resumen,
-        extra,
-      }]
+    const resumen = resumenMods(mods)
+    pushLinea({
+      producto_id: p.id,
+      nombre: p.nombre,
+      categoria: p.categoria,
+      tamano,
+      precio: precioBase + extra,
+      cantidad: 1,
+      mods,
+      mods_resumen: resumen,
+      extra,
     })
     setDetalle(null)
     setEditando(null)
@@ -186,6 +199,7 @@ export default function CartaPedido({
           cantidad: l.cantidad,
           extra: l.extra,
           mods_resumen: l.mods_resumen || null,
+          precio_override: l.precio_override ?? null,
         })),
       })
       if (!r.ok) {
@@ -232,6 +246,12 @@ export default function CartaPedido({
 
                   if (esDestacado) {
                     const promo = p.categoria === 'promo' ? detallePromo(p.id) : null
+                    const promoNombres = promo
+                      ? promo.items
+                        .map(it => productos.find(x => x.id === it.producto_id)?.nombre)
+                        .filter(Boolean)
+                        .join(' · ')
+                      : null
                     return (
                       <li key={p.id}>
                         <button
@@ -254,7 +274,7 @@ export default function CartaPedido({
                             <div className="absolute bottom-0 left-0 right-0 p-4">
                               <p className="font-display text-[1.35rem] font-bold leading-tight drop-shadow">{p.nombre}</p>
                               <p className="text-[13px] text-[var(--ink-soft)] mt-1 line-clamp-2">
-                                {promo ? promo.incluye.join(' · ') : p.descripcion}
+                                {promoNombres || p.descripcion}
                               </p>
                             </div>
                           </div>
@@ -352,17 +372,31 @@ export default function CartaPedido({
               )}
 
               {promoDet && (
-                <div className="rounded-xl border border-[var(--gold)]/25 bg-[var(--gold)]/8 px-4 py-3">
-                  <p className="eyebrow text-[var(--gold)] mb-2">Incluye</p>
-                  <ul className="space-y-1 text-sm">
-                    {promoDet.incluye.map(line => (
-                      <li key={line} className="flex gap-2">
-                        <span className="text-[var(--gold)]">·</span>
-                        <span>{line}</span>
-                      </li>
-                    ))}
+                <div className="rounded-xl border border-[var(--gold)]/25 bg-[var(--gold)]/8 px-4 py-3 space-y-2.5">
+                  <p className="eyebrow text-[var(--gold)]">Lo que incluye</p>
+                  <ul className="space-y-2">
+                    {promoDet.items.map((it, i) => {
+                      const p = productos.find(x => x.id === it.producto_id)
+                      if (!p) return null
+                      return (
+                        <li key={`${it.producto_id}-${i}`} className="flex items-center gap-3">
+                          <div className="relative w-12 h-12 rounded-lg overflow-hidden shrink-0">
+                            <Image src={imagenCarta(p.id, p.categoria)} alt="" fill sizes="48px" className="object-cover" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold truncate">{p.nombre}</p>
+                            <p className="text-[11px] text-[var(--ink-soft)]">
+                              {labelTamano(p.categoria, it.tamano)}
+                              {it.cantidad > 1 ? ` · ×${it.cantidad}` : ''}
+                            </p>
+                          </div>
+                        </li>
+                      )
+                    })}
                   </ul>
-                  <p className="text-xs text-[var(--ink-soft)] mt-2">Precio fijo de la promo · no se edita por partes</p>
+                  <p className="text-xs text-[var(--ink-soft)]">
+                    Al pedirla armás cada producto (sin / extras en burgers y pizzas). Total fijo {pesos(detalle.precio_simple)}.
+                  </p>
                 </div>
               )}
 
@@ -383,26 +417,28 @@ export default function CartaPedido({
                 </div>
               )}
 
-              <div>
-                <p className="eyebrow mb-2">Elegí tamaño</p>
-                <div className="flex gap-1 bg-[var(--char)] border border-[var(--line-soft)] rounded-xl p-1">
-                  {tamanosDe(detalle.categoria).filter(t => precioDe(detalle, t) != null).map(t => (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => setTamanoDet(t)}
-                      className={`flex-1 py-2.5 rounded-lg text-xs font-semibold transition-colors ${
-                        tamanoDet === t
-                          ? 'bg-[var(--gold)] text-[var(--void)]'
-                          : 'text-[var(--ink-soft)] hover:bg-white/[0.04]'
-                      }`}
-                    >
-                      <span className="block">{labelTamano(detalle.categoria, t)}</span>
-                      <span className="block tabular mt-0.5 text-[13px]">{pesos(precioDe(detalle, t)!)}</span>
-                    </button>
-                  ))}
+              {detalle.categoria !== 'promo' && (
+                <div>
+                  <p className="eyebrow mb-2">Elegí tamaño</p>
+                  <div className="flex gap-1 bg-[var(--char)] border border-[var(--line-soft)] rounded-xl p-1">
+                    {tamanosDe(detalle.categoria).filter(t => precioDe(detalle, t) != null).map(t => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setTamanoDet(t)}
+                        className={`flex-1 py-2.5 rounded-lg text-xs font-semibold transition-colors ${
+                          tamanoDet === t
+                            ? 'bg-[var(--gold)] text-[var(--void)]'
+                            : 'text-[var(--ink-soft)] hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        <span className="block">{labelTamano(detalle.categoria, t)}</span>
+                        <span className="block tabular mt-0.5 text-[13px]">{pesos(precioDe(detalle, t)!)}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="flex flex-col gap-2">
                 {esEditableCarta(detalle.categoria) && (
@@ -422,12 +458,36 @@ export default function CartaPedido({
                   onClick={() => agregar(detalle, tamanoDet)}
                   className="btn btn-ember w-full py-3 text-base"
                 >
-                  {esEditableCarta(detalle.categoria) ? 'Agregar así' : 'Agregar'} · {pesos(precioDe(detalle, tamanoDet)!)}
+                  {detalle.categoria === 'promo'
+                    ? `Armar promo · ${pesos(detalle.precio_simple)}`
+                    : esEditableCarta(detalle.categoria)
+                      ? `Agregar así · ${pesos(precioDe(detalle, tamanoDet)!)}`
+                      : `Agregar · ${pesos(precioDe(detalle, tamanoDet)!)}`}
                 </button>
               </div>
             </div>
           </div>
         </div>
+      )}
+
+      {armarPromo && (
+        <PromoArmar
+          promo={armarPromo}
+          productos={productos}
+          recetas={recetas}
+          onClose={() => setArmarPromo(null)}
+          onDone={lineas => {
+            for (const l of lineas) {
+              pushLinea({
+                ...l,
+                key: `promo-${armarPromo.id}-${l.producto_id}-${keyMods(l.mods)}-${Math.random().toString(36).slice(2, 7)}`,
+              })
+            }
+            setArmarPromo(null)
+            setAbierto(true)
+            setError(null)
+          }}
+        />
       )}
 
       {editando && editando.producto.categoria === 'hamburguesa' && (
@@ -517,10 +577,13 @@ export default function CartaPedido({
                           <p className="text-[11px] text-[var(--ink-soft)]">
                             {labelTamano(l.categoria, l.tamano)} · {pesos(l.precio)}
                           </p>
+                          {l.promo_nombre && (
+                            <p className="text-[11px] text-[var(--ember)] mt-0.5">Promo · {l.promo_nombre}</p>
+                          )}
                           {l.mods_resumen && (
                             <p className="text-[11px] text-[var(--gold)] mt-0.5 break-words">{l.mods_resumen}</p>
                           )}
-                          {prod && esEditableCarta(l.categoria) && (
+                          {prod && esEditableCarta(l.categoria) && !l.promo_nombre && (
                             <button
                               type="button"
                               className="text-[11px] link mt-1"

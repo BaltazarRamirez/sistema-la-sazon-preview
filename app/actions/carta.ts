@@ -3,7 +3,6 @@
 import { revalidatePath } from 'next/cache'
 import { TAMANOS, type Tamano } from '@/lib/catalogo'
 import { MOCK_PRODUCTOS } from '@/lib/mock/menu'
-import { detallePromo } from '@/lib/mock/promos'
 import { agregarVentaMock } from '@/lib/mock/ventas'
 
 /** WhatsApp del local (preview). No exportar: en "use server" solo van funciones async. */
@@ -16,6 +15,8 @@ type ItemPedidoCarta = {
   /** Cargo por agregados cobrados (por unidad). */
   extra?: number
   mods_resumen?: string | null
+  /** Precio unitario forzado (ej. parte de una promo). */
+  precio_override?: number | null
 }
 
 type ResultadoPedidoCarta =
@@ -57,15 +58,15 @@ export async function crearPedidoCarta(d: {
     }
     const p = MOCK_PRODUCTOS.find(x => x.id === it.producto_id && x.activo)
     if (!p) return { error: 'Un producto ya no está en la carta.' }
-    const precioBase = it.tamano === 'triple' ? p.precio_triple : it.tamano === 'doble' ? p.precio_doble : p.precio_simple
+    const precioLista = it.tamano === 'triple' ? p.precio_triple : it.tamano === 'doble' ? p.precio_doble : p.precio_simple
     const costoU = it.tamano === 'triple' ? p.costo_triple : it.tamano === 'doble' ? p.costo_doble : p.costo_simple
-    if (precioBase == null) return { error: `${p.nombre} no tiene ese tamaño.` }
+    if (precioLista == null && it.precio_override == null) return { error: `${p.nombre} no tiene ese tamaño.` }
     const extra = Math.max(0, it.extra ?? 0)
-    const precio = precioBase + extra
+    const base = it.precio_override != null ? it.precio_override : precioLista!
+    const precio = base + extra
     subtotal += precio * it.cantidad
-    costo += costoU * it.cantidad
-    const promo = p.categoria === 'promo' ? detallePromo(p.id) : null
-    const detalleTxt = it.mods_resumen || (promo ? promo.incluye.join(' · ') : null)
+    costo += (costoU ?? 0) * it.cantidad
+    const detalleTxt = it.mods_resumen || null
     const nombre = detalleTxt ? `${p.nombre} (${detalleTxt})` : p.nombre
     items.push({
       nombre,

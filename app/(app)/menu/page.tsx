@@ -24,7 +24,11 @@ export default async function MenuPage({
   const seccion: Seccion = SECCIONES.some(s => s.id === vista) ? (vista as Seccion) : 'productos'
 
   const productos = MOCK_PRODUCTOS
-  const sinReceta = productos.filter(p => p.activo && p.insumos_en_receta === 0)
+  /** Bebidas, acompañamientos, promos y postres no llevan receta de cocina. */
+  const sinRecetaCats = new Set(['bebida', 'acompanamiento', 'postre', 'promo'])
+  const sinReceta = productos.filter(
+    p => p.activo && p.insumos_en_receta === 0 && !sinRecetaCats.has(p.categoria),
+  )
   const agregados = listAgregados(true)
 
   const sub =
